@@ -67,9 +67,9 @@ actor {
     storageStore: Trie.Map<Blob, Blob>; //storage DB for Contract Storage stored by Hash Key. CALL implementors will need to keep track of storage changes and revert storage if necessary.
     accounts: Trie.Trie<Blob,Blob>; //a merkle patricia tree storing [binary_nonce, binary_balance, storage_root, code_hash] as RLP encoded data - the account bounty hunter will need to create encoders/decoders for use with the trie - https://github.com/relaxed04/rlp-motoko - https://github.com/f0i/merkle-patricia-trie.mo
     logs: Logs; //logs produced during execution
-    var totalGas : Nat; // Used for keeping track of gas
-    var gasRefund : Nat; // Used for keeping track of gas refunded
-    var return : ?Blob; set for return
+    var totalGas: Nat; // Used for keeping track of gas
+    var gasRefund: Nat; // Used for keeping track of gas refunded
+    var returnValue: ?Blob; // set for return
     blockInfo: {
       number: Nat; //current block number
       gasLimit: Nat; //current block gas limit
@@ -109,15 +109,16 @@ actor {
 
   type Engine = [(ExecutionContext) -> ExecutionContext];
 
-  public func stateTransition() : async /*some type*/ {
+  public func stateTransition(tx: Transaction /*, other inputs */) : async /*some type*/ {
     // check transaction has right number of values
     // check signature is valid
     // check that nonce matches nonce in sender's account
     // Calculate the transaction fee as STARTGAS(=gasLimitTx) * GASPRICE,
-    let fee : Nat = gasLimitTx * gasPrice;
+    let fee: Nat = tx.gasLimitTx * tx.gasPrice;
     // and determine the sending address from the signature.
     // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
     // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction.
+    var remainingGas = fee;
     // Transfer the transaction value from the sender's account to the receiving account.
     // If the receiving account does not yet exist, create it.
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas. (executeCode inputs would include gasLimitTx, code, calldata, contractStorage, etc.)
@@ -129,23 +130,31 @@ actor {
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  func executeCode(/* inputs */) : /* some type */ {
+  func executeCode(
+    code: Array<OpCode>,
+    contractStorage: Storage,
+    currentGas: Nat,
+    gasPrice: Nat,
+    /* other inputs */
+  ) : /* some type */ {
     let programCounter: Nat = 0;
     let stack = Stack.Stack<StackElement>();
     let memory = Memory.new();
-    while (programCounter < Array.size(code)) {
+    let codeSize = Array.size(code);
+    // define execution context
+    let exCon: ExecutionContext = {/* input values */};
+    while (exCon.programCounter < codeSize) {
       // get current instruction from code[programCounter]
-      // check length of instruction
-      // check instructionGas
+      let instruction = code[exCon.programCounter].0;
       // execute instruction via OPCODE functions
-      if (totalGas >= instructionGas) {
-        totalGas -= instructionGas;
-      } else {
+      let output = engine[instruction](exCon);
+      if (output.totalGas < 0) {
         // terminate execution and run out-of-gas sequence
+      } else {
+        exCon := output;
+        exCon.programCounter += 1;
       }
-      programCounter += instructionLength;
     };
-    // At the start of every round of execution, the current instruction is found by taking the pcth byte of code (or 0 if pc >= len(code)), and each instruction has its own definition in terms of how it affects the tuple. For example, ADD pops two items off the stack and pushes their sum, reduces gas by 1 and increments pc by 1, and SSTORE pops the top two items off the stack and inserts the second item into the contract's storage at the index specified by the first item.
   };
 
   // ALL THE OPCODE FUNCTIONS
@@ -154,10 +163,20 @@ actor {
 
   let op_01_ADD = func (exCon: executionContext) : executionContext {
     // pop two values from the stack; check each time that stack is not empty
+    assert exCon.stack.isEmpty() == false;
+    let a: Int = exCon.stack.pop();
+    assert exCon.stack.isEmpty() == false;
+    let b: Int = exCon.stack.pop();
     // add them
-    // check for overflow
+    let result = a + b;
+    // check for result overflow
+    result := result % 2**256;
+    // check for stack overflow - TODO
     // push result to stack
-    // return new stack, 
+    exCon.stack.push(result);
+    exCon.totalGas -= 3;
+    // return new stack
+    exCon;
   };
 
   let op_02_MUL = func (exCon: executionContext) : executionContext {};
