@@ -2,6 +2,7 @@
 
 import Stack "mo:base/Stack";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
+import Map "mo:map/Map"; // see https://mops.one/map
 // any other imports needed
 
 actor {
@@ -42,6 +43,12 @@ actor {
     newValue: ?Array<OpCode>; // Optional, represents the value after the change. `None` can indicate a deletion.
   }; // Code may not be changeable...only deletable
 
+  type BalanceChange = {
+    from: Blob;
+    to: Blob;
+    amount: Nat;
+  };
+
   // The execution context of an EVM call.
   type ExecutionContext = {
     origin: Blob; //originator of the transaction
@@ -55,14 +62,10 @@ actor {
     currentGas: Nat; // Amount of gas available for the current execution.
     gasPrice: Nat; // Current gas price.
     incomingEth: Nat; //amount of eth included with the call
-    balanceChanges: vec<({
-      from: Blob;
-      to: Blob;
-      amount: Nat;
-    })>; //keep track of eth balance changes and commit at the end. Each new context will have to adjust balances based off of this array.
+    balanceChanges: Vec<BalanceChange>; //keep track of eth balance changes and commit at the end. Each new context will have to adjust balances based off of this array.
     storageChanges: Map<(Blob, StorageSlotChange)>;
     codeAdditions: Map.Map<Blob, CodeChange>; //storage DB for EVM code stored by Hash Key
-    blockHashes: vec<(Nat,Blob)>; //up to last 256 block numbers and hashs
+    blockHashes: Vec<(Nat,Blob)>; //up to last 256 block numbers and hashs
     codeStore: Map.Map<Blob, Array<OpCode>>; //storage DB for EVM code stored by Hash Key
     storageStore: Trie.Map<Blob, Blob>; //storage DB for Contract Storage stored by Hash Key. CALL implementors will need to keep track of storage changes and revert storage if necessary.
     accounts: Trie.Trie<Blob,Blob>; //a merkle patricia tree storing [binary_nonce, binary_balance, storage_root, code_hash] as RLP encoded data - the account bounty hunter will need to create encoders/decoders for use with the trie - https://github.com/relaxed04/rlp-motoko - https://github.com/f0i/merkle-patricia-trie.mo
@@ -130,19 +133,44 @@ actor {
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  func executeCode(
+  public func executeCode(
     code: Array<OpCode>,
     contractStorage: Storage,
     currentGas: Nat,
-    gasPrice: Nat,
-    /* other inputs */
-  ) : /* some type */ {
+    gasPrice: Nat
+    /*, other inputs */
+  ) : executionContext {
     let programCounter: Nat = 0;
     let stack = Stack.Stack<StackElement>();
     let memory = Memory.new();
     let codeSize = Array.size(code);
+
     // define execution context
-    let exCon: ExecutionContext = {/* input values */};
+    // This is intended to suit testing of the set of op codes currently being developed, and will be progressively modified as development progresses.
+    let exCon: ExecutionContext = {
+      origin = "\00\ff"; code = code; programCounter = programCounter; 
+      stack = stack; memory = memory; contractStorage = contractStorage; 
+      caller = "\00\ff"; callee = "\00\ff";
+      currentGas = currentGas; gasPrice = gasPrice; incomingEth = 0; 
+      balanceChanges = Vec.new<BalanceChange>(); 
+      storageChanges = Map.new<(Blob, StorageSlotChange)>();
+      codeAdditions = Map.Map.new<Blob, CodeChange>(); 
+      blockHashes = Vec.new<(Nat,Blob)>(); 
+      codeStore = Map.Map.new<Blob, Array<OpCode>>(); 
+      storageStore = Trie.empty(); accounts = Trie.empty(); 
+      logs = Vec.new<LogEntry>(); 
+      totalGas = currentGas; gasRefund = 0; returnValue = null; 
+      blockInfo = {
+        number: Nat = 0; 
+        gasLimit: Nat = 0; 
+        difficulty: Nat = 0; 
+        timestamp: Nat = 0; 
+        coinbase: Blob = "\00\ff";
+        chainId: Nat = 1;
+      };
+      calldata = "\00\ff"; 
+    };
+
     while (exCon.programCounter < codeSize) {
       // get current instruction from code[programCounter]
       let instruction = code[exCon.programCounter].0;
@@ -155,6 +183,7 @@ actor {
         exCon.programCounter += 1;
       }
     };
+    exCon;
   };
 
   // ALL THE OPCODE FUNCTIONS
@@ -175,7 +204,7 @@ actor {
     // push result to stack
     exCon.stack.push(result);
     exCon.totalGas -= 3;
-    // return new stack
+    // return new execution context
     exCon;
   };
 
