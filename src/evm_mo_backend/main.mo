@@ -1,21 +1,18 @@
 // Note this is still a work in progress and code is not yet functional.
 
-import Stack "mo:base/Stack";
+import Array "mo:base/Array";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 // any other imports needed
 
 actor {
   type Address = Blob;
-
   type Byte = Nat8;
-
   type Word = Nat; // 256-bit for EVM compliance. Op codes will need to validate that results do not exceed 256-bit numbers and take overflows into consideration
-
   type OpCode = (Nat8,?Blob); // Considering opcodes range from 0x00 to 0xFF. Plus a set of bytes that can be included
 
-  // A simplified representation of the stack element in EVM.
-  type StackElement = Nat; // May need to represent 256-bit integers.
+  // A simplified representation of the stack element in EVM. Redundant if EVMStack is used.
+  //type StackElement = Nat; // May need to represent 256-bit integers.
 
   // A simplified structure for representing EVM memory.
   // Uses https://github.com/research-ag/vector
@@ -49,12 +46,40 @@ actor {
     amount: Nat;
   };
 
+  // A structure representing an EVM-specific stack.
+  class EVMStack() {
+    var stack = Array.init<Nat>(1024,0);
+    var _size: Nat = 0;
+
+    public func push(X: Nat) {
+      assert(_size < 1024);
+      stack[_size] := X;
+      _size += 1;
+    };
+
+    public func pop() : Nat {
+      assert(_size > 0);
+      _size -= 1;
+      stack[_size];
+    };
+
+    public func peek(pos: Nat) : Nat {
+      assert(pos < _size); // pos = 0 for top item
+      stack[_size - pos - 1];
+    };
+
+    public func poke(pos: Nat, X: Nat) {
+      assert(pos < _size); // pos = 0 for top item
+      stack[_size - pos - 1] := X;
+    };
+  };
+
   // The execution context of an EVM call.
   type ExecutionContext = {
     origin: Blob; //originator of the transaction
     code: Array<OpCode>; // Array of opcodes constituting the smart contract code.
     programCounter: Nat; // Points to the current instruction in the code.
-    stack: Stack.Stack<StackElement>; // The stack used for instruction params and return values.
+    stack: EVMStack; // The stack used for instruction params and return values.
     memory: Memory; // Memory accessible during execution.
     contractStorage: Storage; // Persistent storage for smart contracts.
     caller: Address; // Address of the call initiator.
@@ -141,7 +166,7 @@ actor {
     /*, other inputs */
   ) : executionContext {
     let programCounter: Nat = 0;
-    let stack = Stack.Stack<StackElement>();
+    let stack = EVMStack();
     let memory = Memory.new();
     let codeSize = Array.size(code);
 
@@ -191,10 +216,8 @@ actor {
   // Basic Math and Bitwise Logic
 
   let op_01_ADD = func (exCon: executionContext) : executionContext {
-    // pop two values from the stack; check each time that stack is not empty
-    assert exCon.stack.isEmpty() == false;
+    // pop two values from the stack; traps if stack is empty
     let a: Int = exCon.stack.pop();
-    assert exCon.stack.isEmpty() == false;
     let b: Int = exCon.stack.pop();
     // add them
     let result = a + b;
