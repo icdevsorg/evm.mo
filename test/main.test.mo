@@ -4,7 +4,7 @@ import Array "mo:base/Array";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 
-import Types "./types";
+import Types "../src/evm_mo_backend/types";
 
 class EVMStack = Types.EVMStack;
 type ExecutionContext = Types.ExecutionContext;
