@@ -121,81 +121,107 @@ actor {
     dataTx: Blob; // An optional data field
   };
 
-  /*
-  // This definition is lifted from the Ethereum whitepaper, and is probably redundant in this code.
-  type EVMState = {
-    block_state: /*check what type\*\/; // the global state containing all accounts and includes balances and storage
-    transaction: Transaction;
-    message: ;
-    code: ;
-    memory: ;
-    stack: ;
-    pc: ;
-    gas: ;
+  type CallerState = {
+    balance: Nat;
+    nonce: Nat;
+    code: Array<Opcode>; // empty for externally owned accounts
+    storage: Storage; // empty for externally owned accounts
   };
-  */
+
+  type CalleeState = {
+    balance: Nat;
+    nonce: Nat;
+    code: Array<Opcode>;
+    storage: Storage;
+  };
+
+  type BlockInfo = {
+    blockNumber: Nat;
+    blockGasLimit: Nat;
+    blockDifficulty: Nat;
+    blockTimestamp: Nat;
+    blockCoinbase: Blob;
+    chainId: Nat;
+  };
 
   type Engine = [(ExecutionContext) -> ExecutionContext];
 
-  public func stateTransition(tx: Transaction /*, other inputs */) : async /*some type*/ {
-    // check transaction has right number of values
-    // check signature is valid
-    // check that nonce matches nonce in sender's account
+  public func stateTransition(
+    tx: Transaction,
+    callerState: CallerState,
+    calleeState: CalleeState,
+    gasPrice: Nat,
+    blockHashes: Vec<(Nat, Blob)>,
+    accounts: Trie.Trie<Blob, Blob>,
+    blockInfo: BlockInfo
+  ) : async ExecutionContext {
+    // check transaction has right number of values => will trap if not
+    // check signature is valid => not applicable for this version
+    // check that nonce matches nonce in sender's account => TODO
     // Calculate the transaction fee as STARTGAS(=gasLimitTx) * GASPRICE,
     let fee: Nat = tx.gasLimitTx * tx.gasPrice;
     // and determine the sending address from the signature.
     // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
+    balanceChanges = Vec.new<BalanceChange>();
+    assert (fee <= callerState.balance);
+    Vec.add(balanceChanges, {
+      from = tx.caller;
+      to = blockInfo.blockCoinbase;
+      amount = fee;
+    });
     // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction.
     var remainingGas = fee;
     // Transfer the transaction value from the sender's account to the receiving account.
-    // If the receiving account does not yet exist, create it.
+    // Check that (callerState.balance - fee) > tx.incomingEth. From this point on we need something other than `assert` for error handling.
+    Vec.add(balanceChanges, {
+      from = tx.caller;
+      to = tx.callee;
+      amount = tx.incomingEth;
+    })
+    // If the receiving account does not yet exist, create it. => TODO
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas. (executeCode inputs would include gasLimitTx, code, calldata, contractStorage, etc.)
-    if (callee /* is a contract*/) {
-      // get code from contract (or pre-define it for testing), then:
-      executeCode(/* inputs */);
+    if (calleeState.code != []) {
+      let exCon: ExecutionContext = {
+        origin = tx.caller;
+        code = calleeState.code;
+        programCounter = 0; 
+        stack = EVMStack();
+        memory = Memory.new();
+        contractStorage = calleeState.storage; 
+        caller = tx.caller;
+        callee = tx.callee;
+        currentGas = fee;
+        gasPrice = gasPrice;
+        incomingEth = tx.incomingEth; 
+        balanceChanges = balanceChanges; 
+        storageChanges = Map.new<(Blob, StorageSlotChange)>();
+        codeAdditions = Map.Map.new<Blob, CodeChange>(); 
+        blockHashes = blockHashes; 
+        codeStore = Map.Map.new<Blob, Array<OpCode>>(); 
+        storageStore = Trie.empty();
+        accounts = accounts; 
+        logs = Vec.new<LogEntry>(); 
+        totalGas = currentGas;
+        gasRefund = 0;
+        returnValue = null; 
+        blockInfo = {
+          number = blockInfo.blockNumber; 
+          gasLimit = blockInfo.blockGasLimit; 
+          difficulty = blockInfo.blockDifficulty; 
+          timestamp = blockInfo.blockTimestamp; 
+          coinbase = blockInfo.blockCoinbase;
+          chainId = blockInfo.chainId;
+        };
+        calldata = tx.dataTx; 
+      };
+      executeCode( exCon );
     };
     // If the value transfer failed because the sender did not have enough money, or the code execution ran out of gas, revert all state changes except the payment of the fees, and add the fees to the miner's account.
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  public func executeCode(
-    code: Array<OpCode>,
-    contractStorage: Storage,
-    currentGas: Nat,
-    gasPrice: Nat
-    /*, other inputs */
-  ) : executionContext {
-    let programCounter: Nat = 0;
-    let stack = EVMStack();
-    let memory = Memory.new();
+  public func executeCode(exCon: ExecutionContext) : ExecutionContext {
     let codeSize = Array.size(code);
-
-    // define execution context
-    // This is intended to suit testing of the set of op codes currently being developed, and will be progressively modified as development progresses.
-    let exCon: ExecutionContext = {
-      origin = "\00\ff"; code = code; programCounter = programCounter; 
-      stack = stack; memory = memory; contractStorage = contractStorage; 
-      caller = "\00\ff"; callee = "\00\ff";
-      currentGas = currentGas; gasPrice = gasPrice; incomingEth = 0; 
-      balanceChanges = Vec.new<BalanceChange>(); 
-      storageChanges = Map.new<(Blob, StorageSlotChange)>();
-      codeAdditions = Map.Map.new<Blob, CodeChange>(); 
-      blockHashes = Vec.new<(Nat,Blob)>(); 
-      codeStore = Map.Map.new<Blob, Array<OpCode>>(); 
-      storageStore = Trie.empty(); accounts = Trie.empty(); 
-      logs = Vec.new<LogEntry>(); 
-      totalGas = currentGas; gasRefund = 0; returnValue = null; 
-      blockInfo = {
-        number: Nat = 0; 
-        gasLimit: Nat = 0; 
-        difficulty: Nat = 0; 
-        timestamp: Nat = 0; 
-        coinbase: Blob = "\00\ff";
-        chainId: Nat = 1;
-      };
-      calldata = "\00\ff"; 
-    };
-
     while (exCon.programCounter < codeSize) {
       // get current instruction from code[programCounter]
       let instruction = code[exCon.programCounter].0;
@@ -217,15 +243,15 @@ actor {
 
   let op_01_ADD = func (exCon: executionContext) : executionContext {
     // pop two values from the stack; traps if stack is empty
-    let a: Int = exCon.stack.pop();
-    let b: Int = exCon.stack.pop();
+    let a: Int = exCon.stack.pop(); // needs error handling
+    let b: Int = exCon.stack.pop(); // needs error handling
     // add them
     let result = a + b;
     // check for result overflow
     result := result % 2**256;
     // check for stack overflow - TODO
     // push result to stack
-    exCon.stack.push(result);
+    exCon.stack.push(result); // needs error handling
     exCon.totalGas -= 3;
     // return new execution context
     exCon;
