@@ -34,7 +34,7 @@ actor {
     let fee: Nat = tx.gasLimitTx * tx.gasPrice;
     // and determine the sending address from the signature.
     // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
-    balanceChanges = Vec.new<BalanceChange>();
+    let exCon.balanceChanges = Vec.new<BalanceChange>();
     assert (fee + tx.incomingEth <= callerState.balance);
     Vec.add(balanceChanges, {
       from = tx.caller;
@@ -120,6 +120,19 @@ actor {
 
   public func revert(exCon: ExecutionContext) : ExecutionContext {
     // revert all state changes except payment of fees
+    exCon.programCounter := Array.size(exCon.code);
+    exCon.contractStorage := calleeState.storage;
+    let exCon.balanceChanges = Vec.new<BalanceChange>();
+    Vec.add(balanceChanges, {
+      from = tx.caller;
+      to = blockInfo.blockCoinbase;
+      amount = fee;
+    });
+    let exCon.storageChanges = Map.new<(Blob, StorageSlotChange)>();
+    let exCon.codeAdditions = Map.Map.new<Blob, CodeChange>(); 
+    let exCon.codeStore = Map.Map.new<Blob, Array<OpCode>>(); 
+    let exCon.storageStore = Trie.empty();
+    // other changes to revert?
     exCon;
   };
 
@@ -129,15 +142,15 @@ actor {
 
   let op_01_ADD = func (exCon: ExecutionContext) : async ExecutionContext {
     // pop two values from the stack; traps if stack is empty
-    let a: Int = exCon.stack.pop(); // needs error handling
-    let b: Int = exCon.stack.pop(); // needs error handling
+    let a: Int = exCon.stack.pop();
+    let b: Int = exCon.stack.pop();
     // add them
     let result = a + b;
     // check for result overflow
     result := result % 2**256;
-    // check for stack overflow - TODO
+    // check for stack overflow => will trap
     // push result to stack
-    exCon.stack.push(result); // needs error handling
+    exCon.stack.push(result);
     exCon.totalGas -= 3;
     // return new execution context
     exCon;
