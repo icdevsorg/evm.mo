@@ -42,7 +42,7 @@ actor {
     let fee: Nat = tx.gasLimitTx * tx.gasPriceTx;
     // and determine the sending address from the signature.
     // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
-    var balanceChanges := Vec.new<T.BalanceChange>();
+    var balanceChanges = Vec.new<T.BalanceChange>();
     assert (fee + tx.incomingEth <= callerState.balance);
     Vec.add(balanceChanges, {
       from = tx.caller;
@@ -116,7 +116,7 @@ actor {
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  public func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionContext {
+  public func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : async T.ExecutionContext {
     let codeSize = Array.size(exCon.code);
     while (exVar.programCounter < codeSize) {
       // get current instruction from code[programCounter]
@@ -164,24 +164,17 @@ actor {
 
   public func revert(exCon: T.ExecutionContext) : T.ExecutionVariables {
     // revert all state changes except payment of fees
-    exCon.programCounter := Array.size(exCon.code);
-    //exCon.contractStorage := calleeState.storage;
     var balanceChanges = Vec.new<T.BalanceChange>();
-    Vec.add(exCon.balanceChanges, {
-      from = tx.caller;
-      to = blockInfo.blockCoinbase;
-      amount = fee;
+    Vec.add(balanceChanges, {
+      from = exCon.origin;
+      to = exCon.blockInfo.coinbase;
+      amount = exCon.currentGas;
     });
-    exCon.storageChanges := Map.new<Blob, T.StorageSlotChange>();
-    exCon.codeAdditions := Map.new<Blob, T.CodeChange>(); 
-    exCon.codeStore := Map.new<Blob, Array<OpCode>>(); 
-    exCon.storageStore := Trie.empty();
-    // other changes to revert?
     let newExVar: T.ExecutionVariables = {
       var programCounter = Array.size(exCon.code);
       stack = EVMStack.EVMStack();
       memory = T.Memory.new();
-      var contractStorage = calleeState.storage; 
+      var contractStorage = exCon.contractStorage; 
       var balanceChanges = balanceChanges; 
       var storageChanges = Map.new<Blob, T.StorageSlotChange>();
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
