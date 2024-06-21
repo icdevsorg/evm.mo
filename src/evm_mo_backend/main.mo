@@ -2,10 +2,11 @@
 
 import Array "mo:base/Array";
 import Trie "mo:base/Trie";
+import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
-import EVMStack "./evmStack";
-import T "./types";
+import EVMStack "evmStack";
+import T "types";
 
 actor {
 
@@ -17,7 +18,8 @@ actor {
   type BlockInfo = T.BlockInfo;
   */
 
-  type Engine = [(T.ExecutionContext) -> async T.ExecutionContext];
+  type Result<Ok, Err> = { #ok: Ok; #err: Err};
+  type Engine = [(T.ExecutionContext) -> Result<T.ExecutionContext, Text>];
   type Vec<X> = {
     var data_blocks : [var [var ?X]];
     var i_block : Nat;
@@ -102,29 +104,27 @@ actor {
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  public func executeCode(exCon: T.ExecutionContext) : async T.ExecutionContext {
+  public func executeCode(exCon: T.ExecutionContext) : T.ExecutionContext {
     let codeSize = Array.size(exCon.code);
     while (exCon.programCounter < codeSize) {
       // get current instruction from code[programCounter]
       let instruction = exCon.code[exCon.programCounter].0;
       // execute instruction via OPCODE functions
-      let output : T.ExecutionContext = try {
-        await engine[instruction](exCon);
-      } catch (e) {
-        return revert(exCon);
-      };
-      if (output.totalGas < 0) {
-        // terminate execution and run out-of-gas sequence
-        return revert(exCon);
-      } else {
-        exCon := output;
-        exCon.programCounter += 1;
+      switch (engine[instruction](exCon)) {
+        case (#err(e)) {
+          Debug.print("Error: " # e);
+          return revert(exCon);
+        };
+        case (#ok(output)) {
+          exCon := output;
+          exCon.programCounter += 1;
+        };
       };
     };
     exCon;
   };
 
-  public func revert(exCon: T.ExecutionContext) : async T.ExecutionContext {
+  public func revert(exCon: T.ExecutionContext) : T.ExecutionContext {
     // revert all state changes except payment of fees
     exCon.programCounter := Array.size(exCon.code);
     //exCon.contractStorage := calleeState.storage;
@@ -146,449 +146,458 @@ actor {
 
   // Basic Math and Bitwise Logic
 
-  let op_01_ADD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {
-    // pop two values from the stack; traps if stack is empty
-    let a: Int = exCon.stack.pop();
-    let b: Int = exCon.stack.pop();
-    // add them
-    let result = a + b;
-    // check for result overflow
-    result := result % 2**256;
-    // check for stack overflow => will trap
-    // push result to stack
-    exCon.stack.push(result);
-    exCon.totalGas -= 3;
-    // return new execution context
-    exCon;
+  let op_01_ADD = func (exCon: T.ExecutionContext) : Result<T.ExecutionContext, Text> {
+    // pop two values from the stack; returns error if stack is empty
+    switch (exCon.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exCon.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            // add them and check for result overflow
+            let result = (a + b) % 2**256;
+            // push result to stack and check for stack overflow
+            switch (exCon.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exCon.totalGas -= 3;
+                // return new execution context
+                return #ok(exCon);
+              };
+            };
+          };
+        };
+      };
+    };
   };
 
   /* (This section is commented out for ease of debugging.)
 
-  let op_02_MUL = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_02_MUL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_03_SUB = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_03_SUB = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_04_DIV = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_04_DIV = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_05_SDIV = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_05_SDIV = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_06_MOD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_06_MOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_07_SMOD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_07_SMOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_08_ADDMOD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_08_ADDMOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_09_MULMOD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_09_MULMOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_0A_EXP = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_0A_EXP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_10_LT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_10_LT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_11_GT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_11_GT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_12_SLT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_12_SLT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_13_SGT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_13_SGT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_14_EQ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_14_EQ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_15_ISZERO = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_15_ISZERO = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_16_AND = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_16_AND = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_17_OR = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_17_OR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_18_XOR = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_18_XOR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_19_NOT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_19_NOT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_1A_BYTE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_1A_BYTE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_1B_SHL = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_1B_SHL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_1C_SHR = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_1C_SHR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_1D_SAR = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_1D_SAR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Environmental Information and Block Information
 
-  let op_30_ADDRESS = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_30_ADDRESS = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_31_BALANCE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_31_BALANCE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_32_ORIGIN = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_32_ORIGIN = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_33_CALLER = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_33_CALLER = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_34_CALLVALUE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_34_CALLVALUE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_38_CODESIZE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_38_CODESIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_39_CODECOPY = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_39_CODECOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_3A_GASPRICE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_3A_GASPRICE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_41_COINBASE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_41_COINBASE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_43_NUMBER = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_43_NUMBER = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_45_GASLIMIT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_45_GASLIMIT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_46_CHAINID = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_46_CHAINID = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_48_BASEFEE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_48_BASEFEE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Memory Operations
 
-  let op_50_POP = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_50_POP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_51_MLOAD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_51_MLOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_52_MSTORE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_52_MSTORE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_53_MSTORE8 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_53_MSTORE8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_54_SLOAD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_54_SLOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_55_SSTORE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_55_SSTORE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_56_JUMP = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_56_JUMP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_57_JUMPI = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_57_JUMPI = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_58_PC = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_58_PC = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_59_MSIZE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_59_MSIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_5A_GAS = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_5A_GAS = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Push Operations, Duplication Operations, Exchange Operations
   
-  let op_5F_PUSH0 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_5F_PUSH0 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_60_PUSH1 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_60_PUSH1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_61_PUSH2 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_61_PUSH2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_62_PUSH3 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_62_PUSH3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_63_PUSH4 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_63_PUSH4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_64_PUSH5 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_64_PUSH5 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_65_PUSH6 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_65_PUSH6 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_66_PUSH7 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_66_PUSH7 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_67_PUSH8 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_67_PUSH8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_68_PUSH9 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_68_PUSH9 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_69_PUSH10 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_69_PUSH10 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_6A_PUSH11 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_6A_PUSH11 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_6B_PUSH12 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_6B_PUSH12 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_6C_PUSH13 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_6C_PUSH13 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_6D_PUSH14 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_6D_PUSH14 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_6E_PUSH15 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_6E_PUSH15 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_6F_PUSH16 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_6F_PUSH16 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_70_PUSH17 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_70_PUSH17 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_71_PUSH18 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_71_PUSH18 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_72_PUSH19 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_72_PUSH19 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_73_PUSH20 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_73_PUSH20 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_74_PUSH21 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_74_PUSH21 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_75_PUSH22 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_75_PUSH22 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_76_PUSH23 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_76_PUSH23 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_77_PUSH24 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_77_PUSH24 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_78_PUSH25 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_78_PUSH25 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_79_PUSH26 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_79_PUSH26 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_7A_PUSH27 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_7A_PUSH27 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_7B_PUSH28 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_7B_PUSH28 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_7C_PUSH29 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_7C_PUSH29 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_7D_PUSH30 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_7D_PUSH30 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_7E_PUSH31 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_7E_PUSH31 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_7F_PUSH32 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_7F_PUSH32 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_80_DUP1 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_80_DUP1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_81_DUP2 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_81_DUP2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_82_DUP3 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_82_DUP3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_83_DUP4 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_83_DUP4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_84_DUP5 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_84_DUP5 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_85_DUP6 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_85_DUP6 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_86_DUP7 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_86_DUP7 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_87_DUP8 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_87_DUP8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_88_DUP9 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_88_DUP9 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_89_DUP10 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_89_DUP10 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_8A_DUP11 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_8A_DUP11 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_8B_DUP12 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_8B_DUP12 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_8C_DUP13 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_8C_DUP13 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_8D_DUP14 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_8D_DUP14 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_8E_DUP15 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_8E_DUP15 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_8F_DUP16 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_8F_DUP16 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_90_SWAP1 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_90_SWAP1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_91_SWAP2 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_91_SWAP2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_92_SWAP3 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_92_SWAP3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_93_SWAP4 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_93_SWAP4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_94_SWAP5 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_94_SWAP5 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_95_SWAP6 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_95_SWAP6 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_96_SWAP7 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_96_SWAP7 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_97_SWAP8 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_97_SWAP8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_98_SWAP9 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_98_SWAP9 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_99_SWAP10 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_99_SWAP10 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_9A_SWAP11 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_9A_SWAP11 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_9B_SWAP12 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_9B_SWAP12 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_9C_SWAP13 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_9C_SWAP13 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_9D_SWAP14 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_9D_SWAP14 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_9E_SWAP15 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_9E_SWAP15 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_9F_SWAP16 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_9F_SWAP16 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Logging Operations
 
-  let op_A0_LOG0 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_A0_LOG0 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_A1_LOG1 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_A1_LOG1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_A2_LOG2 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_A2_LOG2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_A3_LOG3 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_A3_LOG3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_A4_LOG4 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_A4_LOG4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Execution and System Operations
   
-  let op_00_STOP = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_00_STOP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_F0_CREATE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_F0_CREATE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_F1_CALL = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_F1_CALL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_F2_CALLCODE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_F2_CALLCODE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_F3_RETURN = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_F3_RETURN = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_F5_CREATE2 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_F5_CREATE2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_FA_STATICCALL = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_FA_STATICCALL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_FB_TXHASH = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_FB_TXHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_FC_CHAINID = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_FC_CHAINID = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_FD_REVERT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_FD_REVERT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_FE_INVALID = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_FE_INVALID = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Other
 
-  let op_20_KECCAK256 = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_20_KECCAK256 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_49_BLOBHASH = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_49_BLOBHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_5C_TLOAD = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_5C_TLOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_5D_TSTORE = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_5D_TSTORE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
-  let op_5E_MCOPY = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_5E_MCOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   // Unused
-  let op_0C_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_0D_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_0E_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_0F_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_1E_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_1F_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_21_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_22_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_23_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_24_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_25_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_26_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_27_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_28_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_29_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_2A_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_2B_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_2C_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_2D_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_2E_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_2F_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_4B_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_4C_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_4D_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_4E_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_4F_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_A5_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_A6_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_A7_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_A8_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_A9_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_AA_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_AB_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_AC_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_AD_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_AE_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_AF_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B0_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B1_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B2_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B3_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B4_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B5_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B6_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B7_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B8_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_B9_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_BA_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_BB_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_BC_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_BD_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_BE_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_BF_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C0_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C1_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C2_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C3_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C4_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C5_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C6_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C7_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C8_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_C9_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_CA_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_CB_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_CC_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_CD_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_CE_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_CF_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D0_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D1_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D2_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D3_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D4_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D5_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D6_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D7_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D8_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_D9_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_DA_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_DB_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_DC_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_DD_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_DE_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_DF_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E0_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E1_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E2_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E3_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E4_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E5_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E6_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E7_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E8_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_E9_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_EA_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_EB_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_EC_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_ED_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_EE_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_EF_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_F6_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_F7_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_F8_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
-  let op_F9_ = func (exCon: T.ExecutionContext) : async T.ExecutionContext {};
+  let op_0C_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_0D_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_0E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_0F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_1E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_1F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_21_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_22_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_23_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_24_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_25_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_26_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_27_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_28_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_29_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_2A_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_2B_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_2C_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_2D_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_2E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_2F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_4B_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_4C_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_4D_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_4E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_4F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_AA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_AB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_AC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_AD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_AE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_AF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_B9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_BA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_BB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_BC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_BD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_BE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_BF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_C9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_CA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_CB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_CC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_CD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_CE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_CF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_D9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_DA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_DB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_DC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_DD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_DE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_DF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_E9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_EA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_EB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_EC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_ED_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_EE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_EF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
 
 
   let engine: Engine = [
