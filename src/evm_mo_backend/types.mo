@@ -2,7 +2,7 @@ import Array "mo:base/Array";
 import Trie "mo:base/Trie";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
-import EVMStack "./evmStack";
+import EVMStack "evmStack";
 
 module {
   public type Address = Blob;
@@ -29,7 +29,7 @@ module {
   public type Memory = Vec<Byte>;
 
   // Represents the EVM storage, mapping 32-byte keys to 32-byte values.
-  public type Storage = Map<[Nat8], [Nat8]>;
+  public type Storage = Trie.Trie<[Nat8], [Nat8]>; // changed from Map<[Nat8], [Nat8]>
 
   public type LogEntry = {
     topics: Vec<Blob>; // Topics are usually the hashed event signature and indexed parameters

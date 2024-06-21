@@ -31,7 +31,7 @@ actor {
     callerState: T.CallerState,
     calleeState: T.CalleeState,
     gasPrice: Nat,
-    blockHashes: Vec<(Nat, Blob)>,
+    blockHashes: [(Nat, Blob)], // changed from Vec<(Nat, Blob)> to Array
     accounts: Trie.Trie<Blob, Blob>,
     blockInfo: T.BlockInfo
   ) : async T.ExecutionContext {
@@ -116,7 +116,7 @@ actor {
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  public func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : async T.ExecutionContext {
+  func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionContext {
     let codeSize = Array.size(exCon.code);
     while (exVar.programCounter < codeSize) {
       // get current instruction from code[programCounter]
@@ -162,7 +162,7 @@ actor {
     newExCon;
   };
 
-  public func revert(exCon: T.ExecutionContext) : T.ExecutionVariables {
+  func revert(exCon: T.ExecutionContext) : T.ExecutionVariables {
     // revert all state changes except payment of fees
     var balanceChanges = Vec.new<T.BalanceChange>();
     Vec.add(balanceChanges, {
