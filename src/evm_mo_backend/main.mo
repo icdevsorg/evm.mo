@@ -52,7 +52,7 @@ actor {
     // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction => not included in this version
     // Transfer the transaction value from the sender's account to the receiving account.
     // Check that ((T.CallerState.balance - fee) > tx.incomingEth) => included above for this version
-    Vec.add(exCon.balanceChanges, {
+    Vec.add(balanceChanges, {
       from = tx.caller;
       to = tx.callee;
       amount = tx.incomingEth;
