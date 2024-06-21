@@ -19,7 +19,7 @@ actor {
   */
 
   type Result<Ok, Err> = { #ok: Ok; #err: Err};
-  type Engine = [(T.ExecutionContext) -> Result<T.ExecutionContext, Text>];
+  type Engine = [(T.ExecutionContext, T.ExecutionVariables) -> Result<T.ExecutionVariables, Text>];
   type Vec<X> = {
     var data_blocks : [var [var ?X]];
     var i_block : Nat;
@@ -38,20 +38,19 @@ actor {
     // check Transaction has right number of values => will trap if not
     // check signature is valid => not applicable for this version
     // check that nonce matches nonce in sender's account => TODO
-    // Calculate the T.Transaction fee as STARTGAS(=gasLimitTx) * GASPRICE,
+    // Calculate the transaction fee as STARTGAS(=gasLimitTx) * GASPRICE,
     let fee: Nat = tx.gasLimitTx * tx.gasPriceTx;
     // and determine the sending address from the signature.
     // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
-    exCon.balanceChanges := Vec.new<T.BalanceChange>();
+    var balanceChanges := Vec.new<T.BalanceChange>();
     assert (fee + tx.incomingEth <= callerState.balance);
-    Vec.add(exCon.balanceChanges, {
+    Vec.add(balanceChanges, {
       from = tx.caller;
       to = blockInfo.blockCoinbase;
       amount = fee;
     });
-    // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the T.Transaction.
-    var remainingGas = fee;
-    // Transfer the T.Transaction value from the sender's account to the receiving account.
+    // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction => not included in this version
+    // Transfer the transaction value from the sender's account to the receiving account.
     // Check that ((T.CallerState.balance - fee) > tx.incomingEth) => included above for this version
     Vec.add(exCon.balanceChanges, {
       from = tx.caller;
@@ -63,21 +62,21 @@ actor {
     let exCon: T.ExecutionContext = {
       origin = tx.caller;
       code = calleeState.code;
-      var programCounter = 0; 
+      programCounter = 0; 
       stack = EVMStack.EVMStack();
       memory = T.Memory.new();
-      var contractStorage = calleeState.storage; 
+      contractStorage = calleeState.storage; 
       caller = tx.caller;
       callee = tx.callee;
       currentGas = fee;
       gasPrice = gasPrice;
       incomingEth = tx.incomingEth; 
-      var balanceChanges = balanceChanges; 
-      var storageChanges = Map.new<Blob, T.StorageSlotChange>();
-      var codeAdditions = Map.new<Blob, T.CodeChange>(); 
+      balanceChanges = balanceChanges; 
+      storageChanges = Map.new<Blob, T.StorageSlotChange>();
+      codeAdditions = Map.new<Blob, T.CodeChange>(); 
       blockHashes = blockHashes; 
-      var codeStore = Map.new<Blob, Array<OpCode>>(); 
-      var storageStore = Map.new<Blob, Blob>(); // changed from Trie.empty();
+      codeStore = Map.new<Blob, Array<OpCode>>(); 
+      storageStore = Map.new<Blob, Blob>(); // changed from Trie.empty();
       accounts = accounts; 
       logs = Vec.new<LogEntry>(); 
       totalGas = currentGas;
@@ -94,9 +93,22 @@ actor {
       calldata = tx.dataTx; 
     };
 
+    let exVar: T.ExecutionVariables = {
+      var programCounter = 0; 
+      stack = EVMStack.EVMStack();
+      memory = T.Memory.new();
+      var contractStorage = calleeState.storage; 
+      var balanceChanges = balanceChanges; 
+      var storageChanges = Map.new<Blob, T.StorageSlotChange>();
+      var codeAdditions = Map.new<Blob, T.CodeChange>(); 
+      var codeStore = Map.new<Blob, Array<OpCode>>(); 
+      var storageStore = Map.new<Blob, Blob>();
+      var totalGas = currentGas;
+    };
+
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
     if (calleeState.code != []) {
-      executeCode( exCon );
+      executeCode(exCon, exVar);
     } else {
       exCon;
     };
@@ -104,31 +116,57 @@ actor {
     // Otherwise, refund the fees for all remaining gas to the sender, and send the fees paid for gas consumed to the miner.
   };
 
-  public func executeCode(exCon: T.ExecutionContext) : T.ExecutionContext {
+  public func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionContext {
     let codeSize = Array.size(exCon.code);
-    while (exCon.programCounter < codeSize) {
+    while (exVar.programCounter < codeSize) {
       // get current instruction from code[programCounter]
-      let instruction = exCon.code[exCon.programCounter].0;
+      let instruction = exCon.code[exVar.programCounter].0;
       // execute instruction via OPCODE functions
-      switch (engine[instruction](exCon)) {
+      switch (engine[instruction](exCon, exVar)) {
         case (#err(e)) {
           Debug.print("Error: " # e);
-          return revert(exCon);
+          exVar:= revert(exCon);
         };
         case (#ok(output)) {
-          exCon := output;
-          exCon.programCounter += 1;
+          exVar := output;
+          exVar.programCounter += 1;
         };
       };
     };
-    exCon;
+    let newExCon: T.ExecutionContext = {
+      origin = exCon.origin;
+      code = exCon.code;
+      programCounter = exVar.programCounter; 
+      stack = exVar.stack;
+      memory = exVar.memory;
+      contractStorage = exVar.contractStorage; 
+      caller = exCon.caller;
+      callee = exCon.callee;
+      currentGas = exCon.currentGas;
+      gasPrice = exCon.gasPrice;
+      incomingEth = exCon.incomingEth; 
+      balanceChanges = exVar.balanceChanges; 
+      storageChanges = exVar.storageChanges;
+      codeAdditions = exVar.codeAdditions; 
+      blockHashes = exCon.blockHashes; 
+      codeStore = exVar.codeStore; 
+      storageStore = exVar.storageStore;
+      accounts = exCon.accounts; 
+      logs = exCon.logs; 
+      totalGas = exVar.totalGas;
+      gasRefund = exCon.gasRefund;
+      returnValue = null; 
+      blockInfo = exCon.blockInfo;
+      calldata = exCon.calldata; 
+    };
+    newExCon;
   };
 
-  public func revert(exCon: T.ExecutionContext) : T.ExecutionContext {
+  public func revert(exCon: T.ExecutionContext) : T.ExecutionVariables {
     // revert all state changes except payment of fees
     exCon.programCounter := Array.size(exCon.code);
     //exCon.contractStorage := calleeState.storage;
-    exCon.balanceChanges := Vec.new<T.BalanceChange>();
+    var balanceChanges = Vec.new<T.BalanceChange>();
     Vec.add(exCon.balanceChanges, {
       from = tx.caller;
       to = blockInfo.blockCoinbase;
@@ -139,30 +177,42 @@ actor {
     exCon.codeStore := Map.new<Blob, Array<OpCode>>(); 
     exCon.storageStore := Trie.empty();
     // other changes to revert?
-    exCon;
+    let newExVar: T.ExecutionVariables = {
+      var programCounter = Array.size(exCon.code);
+      stack = EVMStack.EVMStack();
+      memory = T.Memory.new();
+      var contractStorage = calleeState.storage; 
+      var balanceChanges = balanceChanges; 
+      var storageChanges = Map.new<Blob, T.StorageSlotChange>();
+      var codeAdditions = Map.new<Blob, T.CodeChange>(); 
+      var codeStore = Map.new<Blob, Array<OpCode>>(); 
+      var storageStore = Map.new<Blob, Blob>();
+      var totalGas = 0;
+    };
+    newExVar;
   };
 
   // OPCODE FUNCTIONS
 
   // Basic Math and Bitwise Logic
 
-  let op_01_ADD = func (exCon: T.ExecutionContext) : Result<T.ExecutionContext, Text> {
+  let op_01_ADD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     // pop two values from the stack; returns error if stack is empty
-    switch (exCon.stack.pop()) {
+    switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
-        switch (exCon.stack.pop()) {
+        switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
             // add them and check for result overflow
             let result = (a + b) % 2**256;
             // push result to stack and check for stack overflow
-            switch (exCon.stack.push(result)) {
+            switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exCon.totalGas -= 3;
+                exVar.totalGas -= 3;
                 // return new execution context
-                return #ok(exCon);
+                return #ok(exVar);
               };
             };
           };

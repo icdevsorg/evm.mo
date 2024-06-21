@@ -60,27 +60,27 @@ module {
   public type ExecutionContext = {
     origin: Blob; //originator of the transaction
     code: [OpCode]; // Array of opcodes constituting the smart contract code.
-    var programCounter: Nat; // Points to the current instruction in the code.
+    programCounter: Nat; // Points to the current instruction in the code.
     stack: EVMStack; // The stack used for instruction params and return values.
     memory: Memory; // Memory accessible during execution.
-    var contractStorage: Storage; // Persistent storage for smart contracts.
+    contractStorage: Storage; // Persistent storage for smart contracts.
     caller: Address; // Address of the call initiator.
     callee: Address; // Address of the contract being executed.
     currentGas: Nat; // Amount of gas available for the current execution.
     gasPrice: Nat; // Current gas price.
     incomingEth: Nat; //amount of eth included with the call
-    var balanceChanges: Vec<BalanceChange>; //keep track of eth balance changes and commit at the end. Each new context will have to adjust balances based off of this array.
-    var storageChanges: Map<Blob, StorageSlotChange>;
-    var codeAdditions: Map.Map<Blob, CodeChange>; //storage DB for EVM code stored by Hash Key
+    balanceChanges: Vec<BalanceChange>; //keep track of eth balance changes and commit at the end. Each new context will have to adjust balances based off of this array.
+    storageChanges: Map<Blob, StorageSlotChange>;
+    codeAdditions: Map.Map<Blob, CodeChange>; //storage DB for EVM code stored by Hash Key
     blockHashes: Vec<(Nat,Blob)>; //up to last 256 block numbers and hashs
-    var codeStore: Map.Map<Blob, [OpCode]>; //storage DB for EVM code stored by Hash Key
+    codeStore: Map.Map<Blob, [OpCode]>; //storage DB for EVM code stored by Hash Key
     // storageStore is changed from Trie.Map<> to Map.Map<>
-    var storageStore: Map.Map<Blob, Blob>; //storage DB for Contract Storage stored by Hash Key. CALL implementors will need to keep track of storage changes and revert storage if necessary.
+    storageStore: Map.Map<Blob, Blob>; //storage DB for Contract Storage stored by Hash Key. CALL implementors will need to keep track of storage changes and revert storage if necessary.
     accounts: Trie.Trie<Blob,Blob>; //a merkle patricia tree storing [binary_nonce, binary_balance, storage_root, code_hash] as RLP encoded data - the account bounty hunter will need to create encoders/decoders for use with the trie - https://github.com/relaxed04/rlp-motoko - https://github.com/f0i/merkle-patricia-trie.mo
     logs: Logs; //logs produced during execution
-    var totalGas: Nat; // Used for keeping track of gas
-    var gasRefund: Nat; // Used for keeping track of gas refunded
-    var returnValue: ?Blob; // set for return
+    totalGas: Nat; // Used for keeping track of gas
+    gasRefund: Nat; // Used for keeping track of gas refunded
+    returnValue: ?Blob; // set for return
     blockInfo: {
       number: Nat; //current block number
       gasLimit: Nat; //current block gas limit
@@ -92,7 +92,19 @@ module {
     calldata: Blob; // Input data for the contract execution
   };
 
-  // Your op code functions should take in the execution context as an input variable and update it as is demanded by the op code.
+  public type ExecutionVariables = {
+    var programCounter: Nat;
+    stack: EVMStack;
+    memory: Memory;
+    var contractStorage: Storage;
+    var balanceChanges: Vec<BalanceChange>;
+    var storageChanges: Map<Blob, StorageSlotChange>;
+    var codeAdditions: Map.Map<Blob, CodeChange>;
+    var codeStore: Map.Map<Blob, [OpCode]>;
+    // storageStore is changed from Trie.Map<> to Map.Map<>
+    var storageStore: Map.Map<Blob, Blob>;
+    var totalGas: Nat;
+  };
 
   public type Transaction = {
     caller: Address; // The sender of the message, represented in a real transaction as ECDSA signature components v,r,s
