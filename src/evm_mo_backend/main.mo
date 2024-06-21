@@ -49,7 +49,8 @@ actor {
       to = blockInfo.blockCoinbase;
       amount = fee;
     });
-    // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction => not included in this version
+    // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction
+    let remainingGas = fee; // gas per byte not included in this version
     // Transfer the transaction value from the sender's account to the receiving account.
     // Check that ((T.CallerState.balance - fee) > tx.incomingEth) => included above for this version
     Vec.add(balanceChanges, {
@@ -79,7 +80,7 @@ actor {
       storageStore = Map.new<Blob, Blob>(); // changed from Trie.empty();
       accounts = accounts; 
       logs = Vec.new<LogEntry>(); 
-      totalGas = currentGas;
+      totalGas = remainingGas;
       gasRefund = 0;
       returnValue = null; 
       blockInfo = {
@@ -103,7 +104,7 @@ actor {
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
       var codeStore = Map.new<Blob, Array<OpCode>>(); 
       var storageStore = Map.new<Blob, Blob>();
-      var totalGas = currentGas;
+      var totalGas = remainingGas;
     };
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
