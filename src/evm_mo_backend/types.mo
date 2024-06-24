@@ -1,4 +1,3 @@
-import Array "mo:base/Array";
 import Trie "mo:base/Trie";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
@@ -11,22 +10,13 @@ module {
   public type OpCode = (Nat8,?Blob); // Considering opcodes range from 0x00 to 0xFF. Plus a set of bytes that can be included
   public type EVMStack = EVMStack.EVMStack;
 
-  type Vec<X> = {
-    var data_blocks : [var [var ?X]];
-    var i_block : Nat;
-    var i_element : Nat;
-  };
-  type Map<K, V> = [var ?(
-    keys: [var ?K],
-    values: [var ?V],
-    indexes: [var Nat],
-    bounds: [var Nat32],
-  )];
+  type Vec<X> = Vec.Vector<X>;
+  type Map<K, V> = Map.Map<K, V>;
   type Trie<K, V> = Trie.Trie<K, V>;
 
   // A simplified structure for representing EVM memory.
   // Uses https://github.com/research-ag/vector
-  public type Memory = Vec<Byte>;
+  public type Memory = Vec<Nat8>;
 
   // Represents the EVM storage, mapping 32-byte keys to 32-byte values.
   public type Storage = Trie.Trie<[Nat8], [Nat8]>; // changed from Map<[Nat8], [Nat8]>
@@ -61,23 +51,23 @@ module {
     origin: Blob; //originator of the transaction
     code: [OpCode]; // Array of opcodes constituting the smart contract code.
     programCounter: Nat; // Points to the current instruction in the code.
-    stack: EVMStack; // The stack used for instruction params and return values.
-    memory: Memory; // Memory accessible during execution.
+    stack: [Nat]; //EVMStack; // The stack used for instruction params and return values.
+    memory: [Byte]; //Memory; // Memory accessible during execution.
     contractStorage: Storage; // Persistent storage for smart contracts.
     caller: Address; // Address of the call initiator.
     callee: Address; // Address of the contract being executed.
     currentGas: Nat; // Amount of gas available for the current execution.
     gasPrice: Nat; // Current gas price.
     incomingEth: Nat; //amount of eth included with the call
-    balanceChanges: Vec<BalanceChange>; //keep track of eth balance changes and commit at the end. Each new context will have to adjust balances based off of this array.
-    storageChanges: Map<Blob, StorageSlotChange>;
-    codeAdditions: Map.Map<Blob, CodeChange>; //storage DB for EVM code stored by Hash Key
-    blockHashes: Vec<(Nat,Blob)>; //up to last 256 block numbers and hashs
-    codeStore: Map.Map<Blob, [OpCode]>; //storage DB for EVM code stored by Hash Key
-    // storageStore is changed from Trie.Map<> to Map.Map<>
-    storageStore: Map.Map<Blob, Blob>; //storage DB for Contract Storage stored by Hash Key. CALL implementors will need to keep track of storage changes and revert storage if necessary.
-    accounts: Trie.Trie<Blob,Blob>; //a merkle patricia tree storing [binary_nonce, binary_balance, storage_root, code_hash] as RLP encoded data - the account bounty hunter will need to create encoders/decoders for use with the trie - https://github.com/relaxed04/rlp-motoko - https://github.com/f0i/merkle-patricia-trie.mo
-    logs: Logs; //logs produced during execution
+    balanceChanges: [BalanceChange]; //Vec<BalanceChange>; //keep track of eth balance changes and commit at the end. Each new context will have to adjust balances based off of this array.
+    storageChanges: [(Blob, StorageSlotChange)]; //Map<Blob, StorageSlotChange>;
+    codeAdditions: [(Blob, CodeChange)]; //Map.Map<Blob, CodeChange>; //storage DB for EVM code stored by Hash Key
+    blockHashes: [(Nat, Blob)]; //Vec<(Nat,Blob)>; //up to last 256 block numbers and hashs
+    codeStore: [(Blob, [OpCode])]; //Map.Map<Blob, [OpCode]>; //storage DB for EVM code stored by Hash Key
+    // storageStore is changed from Trie.Map<> to Trie.Trie<>
+    storageStore: [(Blob, Blob)]; //storage DB for Contract Storage stored by Hash Key. CALL implementors will need to keep track of storage changes and revert storage if necessary.
+    accounts: Trie<Blob,Blob>; //a merkle patricia tree storing [binary_nonce, binary_balance, storage_root, code_hash] as RLP encoded data - the account bounty hunter will need to create encoders/decoders for use with the trie - https://github.com/relaxed04/rlp-motoko - https://github.com/f0i/merkle-patricia-trie.mo
+    logs: [LogEntry]; //Logs; //logs produced during execution
     totalGas: Nat; // Used for keeping track of gas
     gasRefund: Nat; // Used for keeping track of gas refunded
     returnValue: ?Blob; // set for return
@@ -95,14 +85,15 @@ module {
   public type ExecutionVariables = {
     var programCounter: Nat;
     stack: EVMStack;
-    memory: Memory;
+    var memory: Memory;
     var contractStorage: Storage;
     var balanceChanges: Vec<BalanceChange>;
     var storageChanges: Map<Blob, StorageSlotChange>;
-    var codeAdditions: Map.Map<Blob, CodeChange>;
-    var codeStore: Map.Map<Blob, [OpCode]>;
+    var codeAdditions: Map<Blob, CodeChange>;
+    var codeStore: Map<Blob, [OpCode]>;
     // storageStore is changed from Trie.Map<> to Map.Map<>
-    var storageStore: Map.Map<Blob, Blob>;
+    var storageStore: Map<Blob, Blob>;
+    var logs: Logs;
     var totalGas: Nat;
   };
 
