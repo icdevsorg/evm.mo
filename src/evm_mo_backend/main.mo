@@ -1,7 +1,7 @@
-// Note this is still a work in progress and code is not yet functional.
-
 import Array "mo:base/Array";
+import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
+import Int "mo:base/Int";
 import Trie "mo:base/Trie";
 import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
@@ -10,15 +10,7 @@ import EVMStack "evmStack";
 import T "types";
 
 actor {
-
-  /* (redundant code, kept temporarily for debugging purposes)
-  type ExecutionContext = T.ExecutionContext;
-  type Transaction = T.Transaction;
-  type CallerState = T.CallerState;
-  type CalleeState = T.CalleeState;
-  type BlockInfo = T.BlockInfo;
-  */
-
+  
   type Result<Ok, Err> = { #ok: Ok; #err: Err};
   type Engine = [(T.ExecutionContext, T.ExecutionVariables) -> Result<T.ExecutionVariables, Text>];
   type Vec<X> = Vec.Vector<X>;
@@ -240,7 +232,7 @@ actor {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
                 exVar.totalGas -= 3;
-                // return new execution context
+                // return new execution context variables
                 return #ok(exVar);
               };
             };
@@ -250,13 +242,104 @@ actor {
     };
   };
 
-  let op_02_MUL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_02_MUL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            let result = (a * b) % 2**256;
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 5;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_03_SUB = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_03_SUB = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            let result = (a - b) % 2**256;
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_04_DIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_04_DIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var result = 0;
+            if (b == 0) {
+              result := 0;
+            } else {
+              result := (Nat.div(a, b));
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 5;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_05_SDIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_05_SDIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        var a_mod = a % 2**256;
+        if (a_mod >= 2**255) { a_mod -= 2**256 };
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var b_mod = b % 2**256;
+            if (b_mod >= 2**255) { b_mod -= 2**256 };
+            var result: Int = 0;
+            if (b == 0) {
+              result := 0;
+            } else {
+              result := (Int.div(a, b));
+              if (result < 0) { result += 2**256 };
+            };
+            switch (exVar.stack.push(Int.abs(result))) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 5;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_06_MOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
