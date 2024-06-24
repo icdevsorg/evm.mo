@@ -325,7 +325,7 @@ actor {
             if (b_mod == 0) {
               result := 0;
             } else {
-              result := (Int.div(a, b));
+              result := (Int.div(a_mod, b_mod));
               if (result < 0) { result += 2**256 };
             };
             switch (exVar.stack.push(Int.abs(result))) {
