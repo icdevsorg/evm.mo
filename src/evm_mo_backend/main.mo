@@ -322,7 +322,7 @@ actor {
             var b_mod = b % 2**256;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result: Int = 0;
-            if (b == 0) {
+            if (b_mod == 0) {
               result := 0;
             } else {
               result := (Int.div(a, b));
