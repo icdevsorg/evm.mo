@@ -47,7 +47,8 @@ module {
 
     public func freeze() : Result<[Nat], Text> {
       if (_size == 0) {
-        return #err("Stack is empty");
+        let _stack: [Nat] = [];
+        return #ok(_stack);
       } else {
         let _stack = Array.freeze<Nat>(stack);
         return #ok(Array.subArray<Nat>(_stack, 0, _size));

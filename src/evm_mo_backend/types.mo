@@ -22,7 +22,7 @@ module {
   public type Storage = Trie.Trie<[Nat8], [Nat8]>; // changed from Map<[Nat8], [Nat8]>
 
   public type LogEntry = {
-    topics: Vec<Blob>; // Topics are usually the hashed event signature and indexed parameters
+    topics: [Blob]; // Changed from Vec<Blob>. Topics are usually the hashed event signature and indexed parameters
     data: Blob; // Non-indexed event parameters
   };
 
@@ -84,7 +84,7 @@ module {
 
   public type ExecutionVariables = {
     var programCounter: Nat;
-    stack: EVMStack;
+    var stack: EVMStack;
     var memory: Memory;
     var contractStorage: Storage;
     var balanceChanges: Vec<BalanceChange>;

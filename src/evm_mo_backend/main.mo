@@ -1,6 +1,7 @@
 // Note this is still a work in progress and code is not yet functional.
 
 import Array "mo:base/Array";
+import Nat8 "mo:base/Nat8";
 import Trie "mo:base/Trie";
 import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
@@ -20,11 +21,9 @@ actor {
 
   type Result<Ok, Err> = { #ok: Ok; #err: Err};
   type Engine = [(T.ExecutionContext, T.ExecutionVariables) -> Result<T.ExecutionVariables, Text>];
-  type Vec<X> = {
-    var data_blocks : [var [var ?X]];
-    var i_block : Nat;
-    var i_element : Nat;
-  };
+  type Vec<X> = Vec.Vector<X>;
+  type Map<K, V> = Map.Map<K, V>;
+  type Trie<K, V> = Trie.Trie<K, V>;
 
   public func stateTransition(
     tx: T.Transaction,
@@ -32,7 +31,7 @@ actor {
     calleeState: T.CalleeState,
     gasPrice: Nat,
     blockHashes: [(Nat, Blob)], // changed from Vec<(Nat, Blob)> to Array
-    accounts: Trie.Trie<Blob, Blob>,
+    accounts: Trie<Blob, Blob>,
     blockInfo: T.BlockInfo
   ) : async T.ExecutionContext {
     // check Transaction has right number of values => will trap if not
@@ -64,22 +63,22 @@ actor {
       origin = tx.caller;
       code = calleeState.code;
       programCounter = 0; 
-      stack = EVMStack.EVMStack();
-      memory = T.Memory.new();
+      stack = [];
+      memory = [];
       contractStorage = calleeState.storage; 
       caller = tx.caller;
       callee = tx.callee;
       currentGas = fee;
       gasPrice = gasPrice;
       incomingEth = tx.incomingEth; 
-      balanceChanges = balanceChanges; 
-      storageChanges = Map.new<Blob, T.StorageSlotChange>();
-      codeAdditions = Map.new<Blob, T.CodeChange>(); 
+      balanceChanges = Vec.toArray<T.BalanceChange>(balanceChanges); 
+      storageChanges = [];
+      codeAdditions = []; 
       blockHashes = blockHashes; 
-      codeStore = Map.new<Blob, Array<OpCode>>(); 
-      storageStore = Map.new<Blob, Blob>(); // changed from Trie.empty();
+      codeStore = []; 
+      storageStore = [];
       accounts = accounts; 
-      logs = Vec.new<LogEntry>(); 
+      logs = []; 
       totalGas = remainingGas;
       gasRefund = 0;
       returnValue = null; 
@@ -96,14 +95,15 @@ actor {
 
     let exVar: T.ExecutionVariables = {
       var programCounter = 0; 
-      stack = EVMStack.EVMStack();
-      memory = T.Memory.new();
+      var stack = EVMStack.EVMStack();
+      var memory = Vec.new<Nat8>();
       var contractStorage = calleeState.storage; 
       var balanceChanges = balanceChanges; 
       var storageChanges = Map.new<Blob, T.StorageSlotChange>();
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
-      var codeStore = Map.new<Blob, Array<OpCode>>(); 
+      var codeStore = Map.new<Blob, [T.OpCode]>(); 
       var storageStore = Map.new<Blob, Blob>();
+      var logs = Vec.new<T.LogEntry>();
       var totalGas = remainingGas;
     };
 
@@ -123,37 +123,71 @@ actor {
       // get current instruction from code[programCounter]
       let instruction = exCon.code[exVar.programCounter].0;
       // execute instruction via OPCODE functions
-      switch (engine[instruction](exCon, exVar)) {
+      switch (engine[Nat8.toNat(instruction)](exCon, exVar)) {
         case (#err(e)) {
           Debug.print("Error: " # e);
-          exVar:= revert(exCon);
+          let newExVar = revert(exCon);
+          exVar.programCounter := newExVar.programCounter; 
+          exVar.stack := newExVar.stack;
+          exVar.memory := newExVar.memory;
+          exVar.contractStorage := newExVar.contractStorage; 
+          exVar.balanceChanges := newExVar.balanceChanges; 
+          exVar.storageChanges := newExVar.storageChanges;
+          exVar.codeAdditions := newExVar.codeAdditions; 
+          exVar.codeStore := newExVar.codeStore; 
+          exVar.storageStore := newExVar.storageStore;
+          exVar.logs := newExVar.logs;
+          exVar.totalGas := newExVar.totalGas;
         };
         case (#ok(output)) {
-          exVar := output;
-          exVar.programCounter += 1;
+          let newExVar = output;
+          newExVar.programCounter += 1;
+          exVar.programCounter := newExVar.programCounter; 
+          exVar.stack := newExVar.stack;
+          exVar.memory := newExVar.memory;
+          exVar.contractStorage := newExVar.contractStorage; 
+          exVar.balanceChanges := newExVar.balanceChanges; 
+          exVar.storageChanges := newExVar.storageChanges;
+          exVar.codeAdditions := newExVar.codeAdditions; 
+          exVar.codeStore := newExVar.codeStore; 
+          exVar.storageStore := newExVar.storageStore;
+          exVar.logs := newExVar.logs;
+          exVar.totalGas := newExVar.totalGas;
         };
       };
     };
+
+    var _stack: [Nat] = [];
+    switch (exVar.stack.freeze()) {
+      case (#err(e)) {
+        // no error case
+      };
+      case (#ok(output)) {
+        _stack := output;
+      };
+    };
+    let stack = _stack;
+
     let newExCon: T.ExecutionContext = {
       origin = exCon.origin;
       code = exCon.code;
       programCounter = exVar.programCounter; 
-      stack = exVar.stack;
-      memory = exVar.memory;
+      stack = stack;
+      memory = Vec.toArray<Nat8>(exVar.memory);
       contractStorage = exVar.contractStorage; 
       caller = exCon.caller;
       callee = exCon.callee;
       currentGas = exCon.currentGas;
       gasPrice = exCon.gasPrice;
       incomingEth = exCon.incomingEth; 
-      balanceChanges = exVar.balanceChanges; 
-      storageChanges = exVar.storageChanges;
-      codeAdditions = exVar.codeAdditions; 
+      balanceChanges = Vec.toArray<T.BalanceChange>(exVar.balanceChanges); 
+      storageChanges = Map.toArray<Blob, T.StorageSlotChange>(exVar.storageChanges);
+      codeAdditions = Map.toArray<Blob, T.CodeChange>(exVar.codeAdditions); 
       blockHashes = exCon.blockHashes; 
-      codeStore = exVar.codeStore; 
-      storageStore = exVar.storageStore;
+      codeStore = Map.toArray<Blob, [T.OpCode]>(exVar.codeStore); 
+      storageStore = Map.toArray<Blob, Blob>(exVar.storageStore);
       accounts = exCon.accounts; 
-      logs = exCon.logs; 
+      logs = Vec.toArray<T.LogEntry>(exVar.logs); 
       totalGas = exVar.totalGas;
       gasRefund = exCon.gasRefund;
       returnValue = null; 
@@ -173,14 +207,15 @@ actor {
     });
     let newExVar: T.ExecutionVariables = {
       var programCounter = Array.size(exCon.code);
-      stack = EVMStack.EVMStack();
-      memory = T.Memory.new();
+      var stack = EVMStack.EVMStack();
+      var memory = Vec.new<Nat8>();
       var contractStorage = exCon.contractStorage; 
       var balanceChanges = balanceChanges; 
       var storageChanges = Map.new<Blob, T.StorageSlotChange>();
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
-      var codeStore = Map.new<Blob, Array<OpCode>>(); 
+      var codeStore = Map.new<Blob, [T.OpCode]>(); 
       var storageStore = Map.new<Blob, Blob>();
+      var logs = Vec.new<T.LogEntry>();
       var totalGas = 0;
     };
     newExVar;
@@ -215,433 +250,431 @@ actor {
     };
   };
 
-  /* (This section is commented out for ease of debugging.)
+  let op_02_MUL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_02_MUL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_03_SUB = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_03_SUB = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_04_DIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_04_DIV = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_05_SDIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_05_SDIV = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_06_MOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_06_MOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_07_SMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_07_SMOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_08_ADDMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_08_ADDMOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_09_MULMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_09_MULMOD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_0A_EXP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_0A_EXP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_10_LT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_10_LT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_11_GT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_11_GT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_12_SLT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_12_SLT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_13_SGT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_13_SGT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_14_EQ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_14_EQ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_15_ISZERO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_15_ISZERO = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_16_AND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_16_AND = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_17_OR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_17_OR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_18_XOR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_18_XOR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_19_NOT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_19_NOT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_1A_BYTE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_1A_BYTE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_1B_SHL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_1B_SHL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_1C_SHR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_1C_SHR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-
-  let op_1D_SAR = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_1D_SAR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Environmental Information and Block Information
 
-  let op_30_ADDRESS = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_30_ADDRESS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_31_BALANCE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_32_ORIGIN = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_33_CALLER = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_33_CALLER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_34_CALLVALUE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_34_CALLVALUE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_38_CODESIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_38_CODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_39_CODECOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_39_CODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3A_GASPRICE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_3A_GASPRICE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_41_COINBASE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_41_COINBASE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_43_NUMBER = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_43_NUMBER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_45_GASLIMIT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_45_GASLIMIT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_46_CHAINID = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_46_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_48_BASEFEE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_48_BASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Memory Operations
 
-  let op_50_POP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_51_MLOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_51_MLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_52_MSTORE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_52_MSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_53_MSTORE8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_53_MSTORE8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_54_SLOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_54_SLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_55_SSTORE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_55_SSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_56_JUMP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_56_JUMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_57_JUMPI = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_57_JUMPI = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_58_PC = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_58_PC = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_59_MSIZE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_59_MSIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5A_GAS = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_5A_GAS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Push Operations, Duplication Operations, Exchange Operations
   
-  let op_5F_PUSH0 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_5F_PUSH0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_60_PUSH1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_61_PUSH2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_61_PUSH2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_62_PUSH3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_62_PUSH3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_63_PUSH4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_63_PUSH4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_64_PUSH5 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_64_PUSH5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_65_PUSH6 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_65_PUSH6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_66_PUSH7 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_66_PUSH7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_67_PUSH8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_67_PUSH8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_68_PUSH9 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_68_PUSH9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_69_PUSH10 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_69_PUSH10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_6A_PUSH11 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_6A_PUSH11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_6B_PUSH12 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_6B_PUSH12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_6C_PUSH13 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_6C_PUSH13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_6D_PUSH14 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_6D_PUSH14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_6E_PUSH15 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_6E_PUSH15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_6F_PUSH16 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_6F_PUSH16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_70_PUSH17 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_70_PUSH17 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_71_PUSH18 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_71_PUSH18 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_72_PUSH19 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_72_PUSH19 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_73_PUSH20 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_73_PUSH20 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_74_PUSH21 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_74_PUSH21 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_75_PUSH22 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_75_PUSH22 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_76_PUSH23 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_76_PUSH23 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_77_PUSH24 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_77_PUSH24 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_78_PUSH25 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_78_PUSH25 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_79_PUSH26 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_79_PUSH26 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_7A_PUSH27 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_7A_PUSH27 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_7B_PUSH28 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_7B_PUSH28 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_7C_PUSH29 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_7C_PUSH29 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_7D_PUSH30 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_7D_PUSH30 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_7E_PUSH31 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_7E_PUSH31 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_7F_PUSH32 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_7F_PUSH32 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_80_DUP1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_80_DUP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_81_DUP2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_81_DUP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_82_DUP3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_82_DUP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_83_DUP4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_83_DUP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_84_DUP5 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_84_DUP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_85_DUP6 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_85_DUP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_86_DUP7 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_86_DUP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_87_DUP8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_87_DUP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_88_DUP9 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_88_DUP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_89_DUP10 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_89_DUP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_8A_DUP11 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_8A_DUP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_8B_DUP12 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_8B_DUP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_8C_DUP13 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_8C_DUP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_8D_DUP14 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_8D_DUP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_8E_DUP15 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_8E_DUP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_8F_DUP16 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_8F_DUP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_90_SWAP1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_90_SWAP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_91_SWAP2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_91_SWAP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_92_SWAP3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_92_SWAP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_93_SWAP4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_93_SWAP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_94_SWAP5 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_94_SWAP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_95_SWAP6 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_95_SWAP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_96_SWAP7 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_96_SWAP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_97_SWAP8 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_97_SWAP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_98_SWAP9 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_98_SWAP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_99_SWAP10 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_99_SWAP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_9A_SWAP11 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_9A_SWAP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_9B_SWAP12 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_9B_SWAP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_9C_SWAP13 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_9C_SWAP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_9D_SWAP14 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_9D_SWAP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_9E_SWAP15 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_9E_SWAP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_9F_SWAP16 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_9F_SWAP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Logging Operations
 
-  let op_A0_LOG0 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A0_LOG0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_A1_LOG1 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A1_LOG1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_A2_LOG2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A2_LOG2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_A3_LOG3 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A3_LOG3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_A4_LOG4 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_A4_LOG4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Execution and System Operations
   
-  let op_00_STOP = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F0_CREATE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F1_CALL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F1_CALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F2_CALLCODE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F2_CALLCODE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F3_RETURN = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F3_RETURN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F5_CREATE2 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_F5_CREATE2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FA_STATICCALL = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_FA_STATICCALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FB_TXHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_FB_TXHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FC_CHAINID = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_FC_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FD_REVERT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_FD_REVERT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FE_INVALID = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_FE_INVALID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Other
 
-  let op_20_KECCAK256 = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_20_KECCAK256 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_49_BLOBHASH = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_49_BLOBHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5C_TLOAD = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_5C_TLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5D_TSTORE = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_5D_TSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5E_MCOPY = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_5E_MCOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Unused
-  let op_0C_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_0D_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_0E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_0F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_1E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_1F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_21_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_22_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_23_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_24_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_25_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_26_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_27_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_28_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_29_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_2A_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_2B_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_2C_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_2D_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_2E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_2F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_4B_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_4C_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_4D_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_4E_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_4F_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_A5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_A6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_A7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_A8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_A9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_AA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_AB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_AC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_AD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_AE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_AF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_B9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_BA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_BB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_BC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_BD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_BE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_BF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_C9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_CA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_CB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_CC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_CD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_CE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_CF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_D9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_DA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_DB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_DC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_DD_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_DE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_DF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E0_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E1_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E2_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E3_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E4_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E5_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_E9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_EA_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_EB_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_EC_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_ED_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_EE_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_EF_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_F6_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_F7_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_F8_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
-  let op_F9_ = func (exCon: T.ExecutionContext) : T.ExecutionContext {};
+  let op_0C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_21_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_22_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_23_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_24_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_25_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_26_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_27_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_28_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_29_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2A_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2B_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4B_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_ED_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   let engine: Engine = [
@@ -687,5 +720,5 @@ actor {
     op_F0_CREATE, op_F1_CALL, op_F2_CALLCODE, op_F3_RETURN, op_F4_DELEGATECALL,
     op_F5_CREATE2, op_F6_, op_F7_, op_F8_, op_F9_, op_FA_STATICCALL, op_FB_TXHASH,
     op_FC_CHAINID, op_FD_REVERT, op_FE_INVALID, op_FF_SELFDESTRUCT
-  ];*/
+  ];
 };
