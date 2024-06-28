@@ -13,7 +13,7 @@ module {
       if (_size >= 1024) {
         return #err("Stack overflow");
       } else {
-        stack[_size] := X;
+        stack[_size] := X % 2**256;
         _size += 1;
         return #ok(());
       };
@@ -40,7 +40,7 @@ module {
       if (pos >= _size) { // pos = 0 for top item
         return #err("Invalid stack position");
       } else {
-        stack[_size - pos - 1] := X;
+        stack[_size - pos - 1] := X % 2**256;
         return #ok(());
       };
     };
