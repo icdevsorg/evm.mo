@@ -1,6 +1,7 @@
 import Array "mo:base/Array";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
+import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
 import Trie "mo:base/Trie";
 import Debug "mo:base/Debug";
@@ -270,8 +271,8 @@ actor {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            let result = (a - b) % 2**256;
-            switch (exVar.stack.push(result)) {
+            let result: Int = (a - b) % 2**256;
+            switch (exVar.stack.push(Int.abs(result))) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
                 exVar.totalGas -= 3;
@@ -314,12 +315,12 @@ actor {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
-        var a_mod = a % 2**256;
+        var a_mod = a;
         if (a_mod >= 2**255) { a_mod -= 2**256 };
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var b_mod = b % 2**256;
+            var b_mod = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result: Int = 0;
             if (b_mod == 0) {
@@ -341,45 +342,519 @@ actor {
     };
   };
 
-  let op_06_MOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_06_MOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var result = 0;
+            if (b == 0) {
+              result := 0;
+            } else {
+              result := a % b;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 5;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_07_SMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_07_SMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        var a_mod = a;
+        if (a_mod >= 2**255) { a_mod -= 2**256 };
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var b_mod = b;
+            if (b_mod >= 2**255) { b_mod -= 2**256 };
+            var result: Int = 0;
+            if (b_mod == 0) {
+              result := 0;
+            } else {
+              result := (Int.rem(a_mod, b_mod));
+              if (result < 0) { result += 2**256 };
+            };
+            switch (exVar.stack.push(Int.abs(result))) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 5;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_08_ADDMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_08_ADDMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(N)) {
+                var result = 0;
+                if (N == 0) {
+                  result := 0;
+                } else {
+                  result := (a + b) % N;
+                };
+                switch (exVar.stack.push(result)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(_)) {
+                    exVar.totalGas -= 8;
+                    return #ok(exVar);
+                  };            
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_09_MULMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_09_MULMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(N)) {
+                var result = 0;
+                if (N == 0) {
+                  result := 0;
+                } else {
+                  result := (a * b) % N;
+                };
+                switch (exVar.stack.push(result)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(_)) {
+                    exVar.totalGas -= 8;
+                    return #ok(exVar);
+                  };            
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_0A_EXP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0A_EXP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(exponent)) {
+            let result = (a ** exponent) % 2**256;
+            var byteSize: Nat = 0;
+            var num = exponent;
+            while (num >= 1) {
+              num /= 256;
+              byteSize += 1;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= (10 + byteSize * 50);
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(b)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(x)) {
+            var x_mod = x % (256 ** (b + 1));
+            if (x_mod >= ((256 ** (b + 1)) / 2)) {
+              x_mod := 2**256 + x_mod - (256 ** (b + 1));
+            };
+            let result = x_mod;
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 5;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_10_LT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_10_LT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var result = 0;
+            if (a < b) {
+              result := 1;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_11_GT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_11_GT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var result = 0;
+            if (a > b) {
+              result := 1;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_12_SLT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_12_SLT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        var a_mod = a;
+        if (a_mod >= 2**255) { a_mod -= 2**256 };
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var b_mod = b;
+            if (b_mod >= 2**255) { b_mod -= 2**256 };
+            var result = 0;
+            if (a_mod < b_mod) {
+              result := 1;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_13_SGT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_13_SGT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        var a_mod = a;
+        if (a_mod >= 2**255) { a_mod -= 2**256 };
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var b_mod = b;
+            if (b_mod >= 2**255) { b_mod -= 2**256 };
+            var result = 0;
+            if (a_mod > b_mod) {
+              result := 1;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_14_EQ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_14_EQ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            var result = 0;
+            if (a == b) {
+              result := 1;
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_15_ISZERO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_15_ISZERO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        var result = 0;
+        if (a ==0) {
+            result := 1;
+        };
+        switch (exVar.stack.push(result)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            exVar.totalGas -= 3;
+            return #ok(exVar);
+          };
+        };
+      };
+    };
+  };
 
-  let op_16_AND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_16_AND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            let a1: Nat64 = Nat64.fromNat(a / 2**192);
+            let a2: Nat64 = Nat64.fromNat((a / 2**128) % 2**64);
+            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**128);
+            let a4: Nat64 = Nat64.fromNat(a % 2**192);
+            let b1: Nat64 = Nat64.fromNat(b / 2**192);
+            let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
+            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
+            let b4: Nat64 = Nat64.fromNat(b % 2**192);
+            let result64 = (a1 & b1) * 2**192 + (a2 & b2) * 2**128 + (a3 & b3) * 2**64 + (a4 & b4);
+            let result = Nat64.toNat(result64);
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_17_OR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_17_OR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            let a1: Nat64 = Nat64.fromNat(a / 2**192);
+            let a2: Nat64 = Nat64.fromNat((a / 2**128) % 2**64);
+            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**128);
+            let a4: Nat64 = Nat64.fromNat(a % 2**192);
+            let b1: Nat64 = Nat64.fromNat(b / 2**192);
+            let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
+            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
+            let b4: Nat64 = Nat64.fromNat(b % 2**192);
+            let result64 = (a1 | b1) * 2**192 + (a2 | b2) * 2**128 + (a3 | b3) * 2**64 + (a4 | b4);
+            let result = Nat64.toNat(result64);
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_18_XOR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_18_XOR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            let a1: Nat64 = Nat64.fromNat(a / 2**192);
+            let a2: Nat64 = Nat64.fromNat((a / 2**128) % 2**64);
+            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**128);
+            let a4: Nat64 = Nat64.fromNat(a % 2**192);
+            let b1: Nat64 = Nat64.fromNat(b / 2**192);
+            let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
+            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
+            let b4: Nat64 = Nat64.fromNat(b % 2**192);
+            let result64 = (a1 ^ b1) * 2**192 + (a2 ^ b2) * 2**128 + (a3 ^ b3) * 2**64 + (a4 ^ b4);
+            let result = Nat64.toNat(result64);
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_19_NOT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_19_NOT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        let result = (2**256 - 1) - a;
+        switch (exVar.stack.push(result)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            exVar.totalGas -= 3;
+            return #ok(exVar);
+          };
+        };
+      };
+    };
+  };
 
-  let op_1A_BYTE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1A_BYTE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(i)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(x)) {
+            var result = 0;
+            if (i < 32) {
+              let num = x / (256 ** (31 - i));
+              result := num % (256 ** (32 - i));
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_1B_SHL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1B_SHL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(shift)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(value)) {
+            let result = (value * (2 ** shift)) % 2**256;
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_1C_SHR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1C_SHR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(shift)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(value)) {
+            let result = (value / (2 ** shift));
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_1D_SAR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1D_SAR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(shift)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(value)) {
+            var result = (value / (2 ** shift));
+            if (value >= 2**255) {
+              result += (2**256 - (2 ** (256 - shift)));
+            };
+            switch (exVar.stack.push(result)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                exVar.totalGas -= 3;
+                return #ok(exVar);
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
 
   // Environmental Information and Block Information
