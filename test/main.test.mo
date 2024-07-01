@@ -1,4 +1,3 @@
-//import Result "mo:base/Result";
 import { test } "mo:test/async"; // see https://mops.one/test
 
 import { stateTransition } "../src/evm_mo_backend/main";
@@ -15,7 +14,7 @@ import Map "mo:map/Map";
 import EVMStack "../src/evm_mo_backend/evmStack";
 import T "../src/evm_mo_backend/types";
 
-let defaultTransaction: T.Transaction = {
+let dummyTransaction: T.Transaction = {
     caller = "\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa";
     nonce = 2;
     gasPriceTx = 5;
@@ -25,21 +24,14 @@ let defaultTransaction: T.Transaction = {
     dataTx = "\00\ee";
 };
 
-let defaultCallerState: T.CallerState = {
+let dummyCallerState: T.CallerState = {
     balance = 5000;
     nonce = 1;
     code = [];
     storage = Trie.empty();
 };
 
-let defaultCalleeState: T.CalleeState = {
-    balance = 0;
-    nonce = 0;
-    code = [(0x60,null), (2,null), (0x60,null), (1,null), (0x01,null)]; // 1 + 2 = ?
-    storage = Trie.empty();
-};
-
-let defaultBlockInfo: T.BlockInfo = {
+let dummyBlockInfo: T.BlockInfo = {
     blockNumber = 1_000_000;
     blockGasLimit = 30_000_000;
     blockDifficulty = 1_000_000_000_000;
@@ -50,8 +42,8 @@ let defaultBlockInfo: T.BlockInfo = {
 
 func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     let context = await stateTransition(
-        defaultTransaction,
-        defaultCallerState,
+        dummyTransaction,
+        dummyCallerState,
         {
             balance = 0;
             nonce = 0;
@@ -61,14 +53,14 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
         5,
         [],
         Trie.empty(),
-        defaultBlockInfo
+        dummyBlockInfo
     );
     context;
 };
 
-test("1 + 2 = 3", func() : async () {
+test("ADD: 1 + 2", func() : async () {
     let context = await testOpCodes(
-        [(0x60,null), (2,null), (0x60,null), (1,null), (0x01,null)] // 1 + 2 = ?
+        [(0x60,null), (2,null), (0x60,null), (1,null), (0x01,null)] // PUSH1 02 PUSH1 01 ADD
     );
     let result = context.stack;
     Debug.print(debug_show(result));
