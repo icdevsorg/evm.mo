@@ -5,12 +5,13 @@ import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
 import Trie "mo:base/Trie";
 import Debug "mo:base/Debug";
+//import R "mo:base/Result";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import EVMStack "evmStack";
 import T "types";
 
-actor {
+module {
   
   type Result<Ok, Err> = { #ok: Ok; #err: Err};
   type Engine = [(T.ExecutionContext, T.ExecutionVariables) -> Result<T.ExecutionVariables, Text>];
@@ -1039,7 +1040,23 @@ actor {
   
   let op_5F_PUSH0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    // check that there are enough operands
+    if (Array.size(exCon.code) < exVar.programCounter + 2) {return #err("Not enough operands")};
+    switch (exVar.stack.push(Nat8.toNat(exCon.code[exVar.programCounter + 1].0))) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(())) {
+        exVar.programCounter += 1;
+        let newGas: Int = exVar.totalGas - 3;
+        if (newGas < 0) {
+          return #err("Out of gas")
+        } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_61_PUSH2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
