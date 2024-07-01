@@ -296,7 +296,7 @@ actor {
             if (b == 0) {
               result := 0;
             } else {
-              result := (Nat.div(a, b));
+              result := a / b;
             };
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
@@ -326,7 +326,7 @@ actor {
             if (b_mod == 0) {
               result := 0;
             } else {
-              result := (Int.div(a_mod, b_mod));
+              result := a_mod / b_mod;
               if (result < 0) { result += 2**256 };
             };
             switch (exVar.stack.push(Int.abs(result))) {
@@ -350,9 +350,7 @@ actor {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
             var result = 0;
-            if (b == 0) {
-              result := 0;
-            } else {
+            if (b != 0) {
               result := a % b;
             };
             switch (exVar.stack.push(result)) {
@@ -380,10 +378,8 @@ actor {
             var b_mod = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result: Int = 0;
-            if (b_mod == 0) {
-              result := 0;
-            } else {
-              result := (Int.rem(a_mod, b_mod));
+            if (b_mod != 0) {
+              result := a_mod % b_mod;
               if (result < 0) { result += 2**256 };
             };
             switch (exVar.stack.push(Int.abs(result))) {
