@@ -31,8 +31,10 @@ actor {
     // check signature is valid => not applicable for this version
     // check that nonce matches nonce in sender's account => TODO
     // Calculate the transaction fee as STARTGAS(=gasLimitTx) * GASPRICE,
-    let fee: Nat = tx.gasLimitTx * tx.gasPriceTx;
-    // and determine the sending address from the signature.
+    let fee: Nat = tx.gasLimitTx * gasPrice;
+    // check that caller is willing to pay at gasPrice,
+    assert (gasPrice <= tx.gasPriceTx);
+    // and determine the sending address from the signature (not in this version).
     // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
     var balanceChanges = Vec.new<T.BalanceChange>();
     assert (fee + tx.incomingEth <= callerState.balance);
@@ -42,7 +44,7 @@ actor {
       amount = fee;
     });
     // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction
-    let remainingGas = fee; // gas per byte not included in this version
+    let remainingGas = tx.gasLimitTx; // gas per byte not included in this version
     // Transfer the transaction value from the sender's account to the receiving account.
     // Check that ((T.CallerState.balance - fee) > tx.incomingEth) => included above for this version
     Vec.add(balanceChanges, {
@@ -61,7 +63,7 @@ actor {
       contractStorage = calleeState.storage; 
       caller = tx.caller;
       callee = tx.callee;
-      currentGas = fee;
+      currentGas = tx.gasLimitTx;
       gasPrice = gasPrice;
       incomingEth = tx.incomingEth; 
       balanceChanges = Vec.toArray<T.BalanceChange>(balanceChanges); 
@@ -196,7 +198,7 @@ actor {
     Vec.add(balanceChanges, {
       from = exCon.origin;
       to = exCon.blockInfo.coinbase;
-      amount = exCon.currentGas;
+      amount = exCon.currentGas * exCon.gasPrice;
     });
     let newExVar: T.ExecutionVariables = {
       var programCounter = Array.size(exCon.code);
@@ -232,9 +234,13 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
+                let newGas: Int = exVar.totalGas - 3;
                 // return new execution context variables
-                return #ok(exVar);
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -254,8 +260,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 5;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 5;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -275,8 +285,12 @@ actor {
             switch (exVar.stack.push(Int.abs(result))) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -301,8 +315,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 5;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 5;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -332,8 +350,12 @@ actor {
             switch (exVar.stack.push(Int.abs(result))) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 5;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 5;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -356,8 +378,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 5;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 5;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -385,8 +411,12 @@ actor {
             switch (exVar.stack.push(Int.abs(result))) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 5;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 5;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -414,8 +444,12 @@ actor {
                 switch (exVar.stack.push(result)) {
                   case (#err(e)) { return #err(e) };
                   case (#ok(_)) {
-                    exVar.totalGas -= 8;
-                    return #ok(exVar);
+                    let newGas: Int = exVar.totalGas - 8;
+                    if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
                   };            
                 };
               };
@@ -445,8 +479,12 @@ actor {
                 switch (exVar.stack.push(result)) {
                   case (#err(e)) { return #err(e) };
                   case (#ok(_)) {
-                    exVar.totalGas -= 8;
-                    return #ok(exVar);
+                    let newGas: Int = exVar.totalGas - 8;
+                    if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
                   };            
                 };
               };
@@ -473,8 +511,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= (10 + byteSize * 50);
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - (10 + byteSize * 50);
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -498,8 +540,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 5;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 5;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -522,8 +568,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -546,8 +596,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -574,8 +628,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -602,8 +660,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -626,8 +688,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -647,8 +713,12 @@ actor {
         switch (exVar.stack.push(result)) {
           case (#err(e)) { return #err(e) };
           case (#ok(_)) {
-            exVar.totalGas -= 3;
-            return #ok(exVar);
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
           };
         };
       };
@@ -675,8 +745,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -705,8 +779,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -735,8 +813,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -753,8 +835,12 @@ actor {
         switch (exVar.stack.push(result)) {
           case (#err(e)) { return #err(e) };
           case (#ok(_)) {
-            exVar.totalGas -= 3;
-            return #ok(exVar);
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
           };
         };
       };
@@ -776,8 +862,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -797,8 +887,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -818,8 +912,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
@@ -842,8 +940,12 @@ actor {
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
-                exVar.totalGas -= 3;
-                return #ok(exVar);
+                let newGas: Int = exVar.totalGas - 3;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
               };
             };
           };
