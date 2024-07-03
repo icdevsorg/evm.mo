@@ -6,7 +6,6 @@ import Int "mo:base/Int";
 import Trie "mo:base/Trie";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
-//import R "mo:base/Result";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import EVMStack "evmStack";
@@ -283,7 +282,8 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            let result: Int = (a - b) % 2**256;
+            var result: Int = a - b;
+            if (result < 0) {result += 2**256};
             switch (exVar.stack.push(Int.abs(result))) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
