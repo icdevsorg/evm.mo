@@ -149,7 +149,7 @@ await test("DIV: 4 / 0", func() : async () {
     assert(result == [0]);
 });
 
-await skip("SDIV: 10 / -2", func() : async () { // throws "execution error, arithmetic overflow"
+await test("SDIV: 10 / -2", func() : async () { // throws "execution error, arithmetic overflow"
     let context = await testOpCodes(
         [(0x7F,null),             // PUSH32
         (0xFF,null), (0xFF,null), (0xFF,null), (0xFF,null), (0xFF,null),

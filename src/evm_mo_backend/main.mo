@@ -335,12 +335,12 @@ module {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
-        var a_mod = a;
+        var a_mod: Int = a;
         if (a_mod >= 2**255) { a_mod -= 2**256 };
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var b_mod = b;
+            var b_mod: Int = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result: Int = 0;
             if (b_mod == 0) {
