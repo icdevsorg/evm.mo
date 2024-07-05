@@ -398,12 +398,12 @@ module {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
-        var a_mod = a;
+        var a_mod: Int = a;
         if (a_mod >= 2**255) { a_mod -= 2**256 };
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var b_mod = b;
+            var b_mod: Int = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result: Int = 0;
             if (b_mod != 0) {
@@ -503,7 +503,15 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(exponent)) {
-            let result = (a ** exponent) % 2**256;
+            //modfied from https://forum.dfinity.org/t/reject-text-ic0503-canister-trapped-explicitly-bigint-function-error/26937/3
+            var result: Nat = 1;
+            var base_ = a;
+            var exponent_ = exponent;
+            while (exponent_ > 0){
+              if (exponent_ % 2 == 1) result := (result * base_) % 2**256;
+              exponent_ := exponent_ / 2;
+              base_ := (base_ * base_) % 2**256;
+            };
             var byteSize: Nat = 0;
             var num = exponent;
             while (num >= 1) {
@@ -616,12 +624,12 @@ module {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
-        var a_mod = a;
+        var a_mod: Int = a;
         if (a_mod >= 2**255) { a_mod -= 2**256 };
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var b_mod = b;
+            var b_mod: Int = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result = 0;
             if (a_mod < b_mod) {
@@ -648,12 +656,12 @@ module {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
-        var a_mod = a;
+        var a_mod: Int = a;
         if (a_mod >= 2**255) { a_mod -= 2**256 };
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var b_mod = b;
+            var b_mod: Int = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result = 0;
             if (a_mod > b_mod) {
@@ -742,8 +750,7 @@ module {
             let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
             let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
             let b4: Nat64 = Nat64.fromNat(b % 2**192);
-            let result64 = (a1 & b1) * 2**192 + (a2 & b2) * 2**128 + (a3 & b3) * 2**64 + (a4 & b4);
-            let result = Nat64.toNat(result64);
+            let result = Nat64.toNat(a1 & b1) * 2**192 + Nat64.toNat(a2 & b2) * 2**128 + Nat64.toNat(a3 & b3) * 2**64 + Nat64.toNat(a4 & b4);
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
@@ -776,8 +783,7 @@ module {
             let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
             let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
             let b4: Nat64 = Nat64.fromNat(b % 2**192);
-            let result64 = (a1 | b1) * 2**192 + (a2 | b2) * 2**128 + (a3 | b3) * 2**64 + (a4 | b4);
-            let result = Nat64.toNat(result64);
+            let result = Nat64.toNat(a1 | b1) * 2**192 + Nat64.toNat(a2 | b2) * 2**128 + Nat64.toNat(a3 | b3) * 2**64 + Nat64.toNat(a4 | b4);
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
@@ -810,8 +816,7 @@ module {
             let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
             let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
             let b4: Nat64 = Nat64.fromNat(b % 2**192);
-            let result64 = (a1 ^ b1) * 2**192 + (a2 ^ b2) * 2**128 + (a3 ^ b3) * 2**64 + (a4 ^ b4);
-            let result = Nat64.toNat(result64);
+            let result = Nat64.toNat(a1 ^ b1) * 2**192 + Nat64.toNat(a2 ^ b2) * 2**128 + Nat64.toNat(a3 ^ b3) * 2**64 + Nat64.toNat(a4 ^ b4);
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
@@ -859,7 +864,7 @@ module {
             var result = 0;
             if (i < 32) {
               let num = x / (256 ** (31 - i));
-              result := num % (256 ** (32 - i));
+              result := num % 256;
             };
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
