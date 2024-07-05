@@ -1016,6 +1016,7 @@ module {
 
 
   // Memory Operations
+  // (Consider comparing Map and Trie types)
 
   let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
