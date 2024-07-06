@@ -77,7 +77,7 @@ module {
       logs = []; 
       totalGas = remainingGas;
       gasRefund = 0;
-      returnValue = null; 
+      returnData = null; 
       blockInfo = {
         number = blockInfo.blockNumber; 
         gasLimit = blockInfo.blockGasLimit; 
@@ -186,7 +186,7 @@ module {
       logs = Vec.toArray<T.LogEntry>(exVar.logs); 
       totalGas = exVar.totalGas;
       gasRefund = exCon.gasRefund;
-      returnValue = null; 
+      returnData = null; 
       blockInfo = exCon.blockInfo;
       calldata = exCon.calldata; 
     };
@@ -932,7 +932,7 @@ module {
                   return #err("Out of gas")
                   } else {
                   exVar.totalGas := Int.abs(newGas);
-                  return #ok(exVar); };
+                  return #ok(exVar);};
               };
             };
           };
@@ -944,27 +944,139 @@ module {
 
   // Environmental Information and Block Information
 
-  let op_30_ADDRESS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_30_ADDRESS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    var pos: Nat = 32;
+    var result: Nat = 0;
+    for (byte: Nat8 in exCon.callee.vals()) {
+      pos -= 1;
+      result += Nat8.toNat(byte) * (256 ** pos);
+    };
+    switch (exVar.stack.push(result)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
+  // TODO
   let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  // Needs https://github.com/relaxed04/rlp-motoko
+  // See also https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
 
-  let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    var pos: Nat = 32;
+    var result: Nat = 0;
+    for (byte: Nat8 in exCon.origin.vals()) {
+      pos -= 1;
+      result += Nat8.toNat(byte) * (256 ** pos);
+    };
+    switch (exVar.stack.push(result)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_33_CALLER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_33_CALLER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    var pos: Nat = 32;
+    var result: Nat = 0;
+    for (byte: Nat8 in exCon.caller.vals()) {
+      pos -= 1;
+      result += Nat8.toNat(byte) * (256 ** pos);
+    };
+    switch (exVar.stack.push(result)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_34_CALLVALUE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_34_CALLVALUE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.incomingEth)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.calldata.size())) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_38_CODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_38_CODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.code.size())) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_39_CODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_3A_GASPRICE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_3A_GASPRICE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.gasPrice)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
@@ -976,23 +1088,147 @@ module {
 
   let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(blockNumber)) {
+        let index: Int = exCon.blockInfo.number - blockNumber - 1;
+        var result: Nat = 0;
+        if ((index >= 0) and (index < exCon.blockHashes.size())) {
+          let hashTuple = exCon.blockHashes[Int.abs(index)];
+          var pos: Nat = hashTuple.1.size();
+          for (byte: Nat8 in hashTuple.1.vals()) {
+            pos -= 1;
+            result += Nat8.toNat(byte) * (256 ** pos);
+          };
+        };
+        switch (exVar.stack.push(result)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            let newGas: Int = exVar.totalGas - 20;
+            if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar); };
+          };
+        };
+      };
+    };
+  };
 
-  let op_41_COINBASE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_41_COINBASE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    var pos: Nat = 32;
+    var result: Nat = 0;
+    for (byte: Nat8 in exCon.blockInfo.coinbase.vals()) {
+      pos -= 1;
+      result += Nat8.toNat(byte) * (256 ** pos);
+    };
+    switch (exVar.stack.push(result)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.blockInfo.timestamp)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_43_NUMBER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_43_NUMBER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.blockInfo.number)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.blockInfo.difficulty)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_45_GASLIMIT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_45_GASLIMIT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.blockInfo.gasLimit)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_46_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_46_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(exCon.blockInfo.chainId)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_48_BASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_48_BASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(0)) { // Base fee has not been included in the defined execution context.
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
 
   // Memory Operations

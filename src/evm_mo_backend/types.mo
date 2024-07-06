@@ -70,7 +70,7 @@ module {
     logs: [LogEntry]; //Logs; //logs produced during execution
     totalGas: Nat; // Used for keeping track of gas
     gasRefund: Nat; // Used for keeping track of gas refunded
-    returnValue: ?Blob; // set for return
+    returnData: ?Blob; // set for return
     blockInfo: {
       number: Nat; //current block number
       gasLimit: Nat; //current block gas limit
