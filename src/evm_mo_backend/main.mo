@@ -308,12 +308,7 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var result = 0;
-            if (b == 0) {
-              result := 0;
-            } else {
-              result := a / b;
-            };
+            let result = if (b == 0) { 0; } else { a / b; };
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
@@ -343,9 +338,7 @@ module {
             var b_mod: Int = b;
             if (b_mod >= 2**255) { b_mod -= 2**256 };
             var result: Int = 0;
-            if (b_mod == 0) {
-              result := 0;
-            } else {
+            if (b_mod != 0) {
               result := a_mod / b_mod;
               if (result < 0) { result += 2**256 };
             };
@@ -373,10 +366,7 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(b)) {
-            var result = 0;
-            if (b != 0) {
-              result := a % b;
-            };
+            let result = if (b == 0) { 0; } else { a % b; };
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
               case (#ok(_)) {
@@ -437,12 +427,7 @@ module {
             switch (exVar.stack.pop()) {
               case (#err(e)) { return #err(e) };
               case (#ok(N)) {
-                var result = 0;
-                if (N == 0) {
-                  result := 0;
-                } else {
-                  result := (a + b) % N;
-                };
+                let result = if (N == 0) { 0; } else { (a + b) % N; };
                 switch (exVar.stack.push(result)) {
                   case (#err(e)) { return #err(e) };
                   case (#ok(_)) {
@@ -472,12 +457,7 @@ module {
             switch (exVar.stack.pop()) {
               case (#err(e)) { return #err(e) };
               case (#ok(N)) {
-                var result = 0;
-                if (N == 0) {
-                  result := 0;
-                } else {
-                  result := (a * b) % N;
-                };
+                let result = if (N == 0) { 0; } else { (a * b) % N; };
                 switch (exVar.stack.push(result)) {
                   case (#err(e)) { return #err(e) };
                   case (#ok(_)) {
