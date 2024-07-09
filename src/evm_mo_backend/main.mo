@@ -8,6 +8,8 @@ import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
+import RLP "mo:rlp-motoko"; // see https://github.com/relaxed04/rlp-motoko
+import RLPTypes "mo:rlp-motoko/types";
 import EVMStack "evmStack";
 import T "types";
 
