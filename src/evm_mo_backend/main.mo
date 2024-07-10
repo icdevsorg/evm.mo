@@ -1,15 +1,16 @@
 import Array "mo:base/Array";
+import Buffer "mo:base/Buffer";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
+import Blob "mo:base/Blob";
 import Trie "mo:base/Trie";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
-import RLP "mo:rlp-motoko"; // see https://github.com/relaxed04/rlp-motoko
-import RLPTypes "mo:rlp-motoko/types";
+import { encodeAccount; decodeAccount} "rlp"; // see https://github.com/relaxed04/rlp-motoko
 import EVMStack "evmStack";
 import T "types";
 
@@ -20,11 +21,13 @@ module {
   type Vec<X> = Vec.Vector<X>;
   type Map<K, V> = Map.Map<K, V>;
   type Trie<K, V> = Trie.Trie<K, V>;
+  type Key<K> = Trie.Key<K>;
+  func key(n: Blob) : Key<Blob> { { hash = Blob.hash(n); key = n } };
 
   public func stateTransition(
     tx: T.Transaction,
-    callerState: T.CallerState,
-    calleeState: T.CalleeState,
+    callerState: T.CallerState, // in production, would be derived from the accounts Trie
+    calleeState: T.CalleeState, // in production, would be derived from the accounts Trie or created anew
     gasPrice: Nat,
     blockHashes: [(Nat, Blob)], // changed from Vec<(Nat, Blob)> to Array
     accounts: Trie<Blob, Blob>,
@@ -967,11 +970,44 @@ module {
     };
   };
 
-  // TODO
-  let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  // Needs https://github.com/relaxed04/rlp-motoko
-  // See also https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
-
+  // TODO - scan through exVar.balanceChanges
+  let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    let addressBuffer = Buffer.Buffer<Nat8>(20);
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(addressNat)) {
+        for (i in Iter.revRange(19, 0)) {
+          addressBuffer.add(Nat8.fromNat(addressNat / (256 ** Int.abs(i))));
+        };
+        let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+        let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+        switch (accountData) {
+          case (null) {
+            switch (exVar.stack.push(0)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {};
+            };
+          };
+          case (?data) {
+            let decodedData = decodeAccount(data);
+            let balance = decodedData.1;
+            switch (exVar.stack.push(balance)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {};
+            };
+          };
+        };
+        let newGas: Int = exVar.totalGas - 100; // warm/cold address distinction not in this version
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
+  
   let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     var pos: Nat = 32;
     var result: Nat = 0;
@@ -1080,7 +1116,43 @@ module {
     };
   };
 
-  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  // TODO - scan through exVar.codeAdditions (+ exVar.codeStore?)
+  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    let addressBuffer = Buffer.Buffer<Nat8>(20);
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(addressNat)) {
+        for (i in Iter.revRange(19, 0)) {
+          addressBuffer.add(Nat8.fromNat(addressNat / (256 ** Int.abs(i))));
+        };
+        let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+        let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+        switch (accountData) {
+          case (null) {
+            switch (exVar.stack.push(0)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {};
+            };
+          };
+          case (?data) {
+            let decodedData = decodeAccount(data);
+            let code = decodedData.3;
+            switch (exVar.stack.push(code.size())) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {};
+            };
+          };
+        };
+        let newGas: Int = exVar.totalGas - 100; // warm/cold address distinction not in this version
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
   let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
@@ -1215,7 +1287,35 @@ module {
     };
   };
 
-  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  // TODO - scan through exVar.balanceChanges
+  // TODO - include callerState and calleeState in accounts Trie
+  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    let address = exCon.caller;
+    let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+    switch (accountData) {
+      case (null) {
+        switch (exVar.stack.push(0)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {};
+        };
+      };
+      case (?data) {
+        let decodedData = decodeAccount(data);
+        let balance = decodedData.1;
+        switch (exVar.stack.push(balance)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {};
+        };
+      };
+    };
+    let newGas: Int = exVar.totalGas - 5;
+    if (newGas < 0) {
+      return #err("Out of gas")
+      } else {
+      exVar.totalGas := Int.abs(newGas);
+      return #ok(exVar);
+    };
+  };
 
   let op_48_BASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(0)) { // Base fee has not been included in the defined execution context.
