@@ -33,9 +33,15 @@ module {
     accounts: Trie<Blob, Blob>,
     blockInfo: T.BlockInfo
   ) : async T.ExecutionContext {
-    // check Transaction has right number of values => will trap if not
-    // check signature is valid => not applicable for this version
-    // check that nonce matches nonce in sender's account => TODO
+    // Add (or replace) caller and callee details in accounts Trie
+    let encodedCallerState = encodeAccount((callerState.nonce, callerState.balance, callerState.storage, callerState.code));
+    let encodedCalleeState = encodeAccount((calleeState.nonce, calleeState.balance, calleeState.storage, calleeState.code));
+    let accounts1 = Trie.put(accounts, key(tx.caller), Blob.equal, encodedCallerState).0;
+    let accounts2 = Trie.put(accounts1, key(tx.callee), Blob.equal, encodedCalleeState).0;
+    // Add origin and coinbase to accounts => TODO
+    // Check Transaction has right number of values => will trap if not
+    // Check signature is valid => not applicable for this version
+    // Check that nonce matches nonce in sender's account => TODO
     // Calculate the transaction fee as STARTGAS(=gasLimitTx) * GASPRICE,
     let fee: Nat = tx.gasLimitTx * gasPrice;
     // check that caller is willing to pay at gasPrice,
@@ -78,7 +84,7 @@ module {
       blockHashes = blockHashes; 
       codeStore = []; 
       storageStore = [];
-      accounts = accounts; 
+      accounts = accounts2; 
       logs = []; 
       totalGas = remainingGas;
       gasRefund = 0;
@@ -221,6 +227,13 @@ module {
     };
     newExVar;
   };
+
+  // TODO
+  /*
+  func codeHash(code: [OpCode]) : Blob {
+    // use https://mops.one/sha2
+  };
+  */
 
   // OPCODE FUNCTIONS
 
@@ -970,7 +983,6 @@ module {
     };
   };
 
-  // TODO - scan through exVar.balanceChanges
   let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let addressBuffer = Buffer.Buffer<Nat8>(20);
     switch (exVar.stack.pop()) {
@@ -981,21 +993,21 @@ module {
         };
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+        var balance = 0;
         switch (accountData) {
-          case (null) {
-            switch (exVar.stack.push(0)) {
-              case (#err(e)) { return #err(e) };
-              case (#ok(_)) {};
-            };
-          };
+          case (null) {};
           case (?data) {
             let decodedData = decodeAccount(data);
-            let balance = decodedData.1;
-            switch (exVar.stack.push(balance)) {
-              case (#err(e)) { return #err(e) };
-              case (#ok(_)) {};
-            };
+            balance := decodedData.1;
           };
+        };
+        for (change in Vec.vals(exVar.balanceChanges)) {
+          if (change.from == address) {balance -= change.amount};
+          if (change.to == address) {balance += change.amount};
+        };
+        switch (exVar.stack.push(balance)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {};
         };
         let newGas: Int = exVar.totalGas - 100; // warm/cold address distinction not in this version
         if (newGas < 0) {
@@ -1116,7 +1128,7 @@ module {
     };
   };
 
-  // TODO - scan through exVar.codeAdditions (+ exVar.codeStore?)
+  // TODO - scan through exVar.codeAdditions
   let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let addressBuffer = Buffer.Buffer<Nat8>(20);
     switch (exVar.stack.pop()) {
@@ -1127,21 +1139,27 @@ module {
         };
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+        var extCodeSize = 0;
         switch (accountData) {
-          case (null) {
-            switch (exVar.stack.push(0)) {
-              case (#err(e)) { return #err(e) };
-              case (#ok(_)) {};
-            };
-          };
+          case (null) {};
           case (?data) {
             let decodedData = decodeAccount(data);
             let code = decodedData.3;
-            switch (exVar.stack.push(code.size())) {
-              case (#err(e)) { return #err(e) };
-              case (#ok(_)) {};
-            };
+            extCodeSize := code.size();
           };
+        };
+        // To be utilised once codeHash is implemented within accounts
+        /*
+        for (change in Map.entries(exVar.codeAdditions)) {
+          if (change.0 == decoded Trie.get(exCon.accounts, key address, Blob.equal).3) {
+            get extCodeSize from change.1.newValue then
+            repeat the search using change.1.key
+          };
+        };
+        */
+        switch (exVar.stack.push(extCodeSize)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {};
         };
         let newGas: Int = exVar.totalGas - 100; // warm/cold address distinction not in this version
         if (newGas < 0) {
@@ -1288,25 +1306,24 @@ module {
   };
 
   // TODO - scan through exVar.balanceChanges
-  // TODO - include callerState and calleeState in accounts Trie
   let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let address = exCon.caller;
     let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+    var balance = 0;
     switch (accountData) {
-      case (null) {
-        switch (exVar.stack.push(0)) {
-          case (#err(e)) { return #err(e) };
-          case (#ok(_)) {};
-        };
-      };
+      case (null) {};
       case (?data) {
         let decodedData = decodeAccount(data);
-        let balance = decodedData.1;
-        switch (exVar.stack.push(balance)) {
-          case (#err(e)) { return #err(e) };
-          case (#ok(_)) {};
-        };
+        balance := decodedData.1;
       };
+    };
+    for (change in Vec.vals(exVar.balanceChanges)) {
+      if (change.from == address) {balance -= change.amount};
+      if (change.to == address) {balance += change.amount};
+    };
+    switch (exVar.stack.push(balance)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {};
     };
     let newGas: Int = exVar.totalGas - 5;
     if (newGas < 0) {
