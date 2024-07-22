@@ -10,7 +10,11 @@ import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
-import { encodeAccount; decodeAccount} "rlp"; // see https://github.com/relaxed04/rlp-motoko
+import Sha256 "mo:sha2/Sha256"; // see https://mops.one/sha2
+import MPTrie "mo:merkle-patricia-trie/Trie"; // see https://github.com/f0i/merkle-patricia-trie.mo
+import K "mo:merkle-patricia-trie/Key";
+import V "mo:merkle-patricia-trie/Value";
+import { encodeAccount; decodeAccount } "rlp"; // see https://github.com/relaxed04/rlp-motoko
 import EVMStack "evmStack";
 import T "types";
 
@@ -228,12 +232,18 @@ module {
     newExVar;
   };
 
-  // TODO
-  /*
-  func codeHash(code: [OpCode]) : Blob {
-    // use https://mops.one/sha2
+  func getCodeHash(code: [T.OpCode]) : Blob {
+    Sha256.fromArray(#sha256, code);
   };
-  */
+
+  func getStorageRoot(storage: T.Storage) : Blob {
+    var trie = MPTrie.init();
+    let iter = Trie.iter(storage);
+    for ((k,v) in iter) {
+      MPTrie.put(trie, K.fromKeyBytes(k), V.fromArray(v));
+    };
+    MPTrie.hash(trie);
+  };
 
   // OPCODE FUNCTIONS
 
