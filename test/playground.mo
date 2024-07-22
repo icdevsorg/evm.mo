@@ -1,9 +1,9 @@
 // This is intended as a temporary and rudimentary tool to test opcodes. It can
-// be deployed locally as a canister. The public function accepts [(Nat8,?Blob)]
+// be deployed locally as a canister. The public function accepts [Nat8]
 // as its argument type.
 //
 // For example, `PUSH1 2 PUSH1 1 ADD` would be entered as
-// `[(0x60,null), (2,null), (0x60,null), (1,null), (0x01,null)]`.
+// `[0x60, 2, 0x60, 1, 0x01]`.
 //
 // The public function returns the stack as a [Nat] type.
 
