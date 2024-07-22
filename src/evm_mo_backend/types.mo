@@ -7,7 +7,7 @@ module {
   public type Address = Blob;
   public type Byte = Nat8;
   public type Word = Nat; // 256-bit for EVM compliance. Op codes will need to validate that results do not exceed 256-bit numbers and take overflows into consideration
-  public type OpCode = (Nat8,?Blob); // Considering opcodes range from 0x00 to 0xFF. Plus a set of bytes that can be included
+  public type OpCode = Nat8; // Considering opcodes range from 0x00 to 0xFF. (Removed: Plus a set of bytes that can be included)
   public type EVMStack = EVMStack.EVMStack;
 
   type Vec<X> = Vec.Vector<X>;

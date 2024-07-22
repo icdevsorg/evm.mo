@@ -128,7 +128,7 @@ module {
     let codeSize = Array.size(exCon.code);
     while (exVar.programCounter < codeSize) {
       // get current instruction from code[programCounter]
-      let instruction = exCon.code[exVar.programCounter].0;
+      let instruction = exCon.code[exVar.programCounter];
       // execute instruction via OPCODE functions
       switch (engine[Nat8.toNat(instruction)](exCon, exVar)) {
         case (#err(e)) {
