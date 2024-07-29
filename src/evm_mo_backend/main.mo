@@ -10,6 +10,7 @@ import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
+import { bhash } "mo:map/Map";
 import Sha256 "mo:sha2/Sha256"; // see https://mops.one/sha2
 import MPTrie "mo:merkle-patricia-trie/Trie"; // see https://github.com/f0i/merkle-patricia-trie.mo
 import K "mo:merkle-patricia-trie/Key";
@@ -38,8 +39,8 @@ module {
     blockInfo: T.BlockInfo
   ) : async T.ExecutionContext {
     // Add (or replace) caller and callee details in accounts Trie
-    let encodedCallerState = encodeAccount((callerState.nonce, callerState.balance, callerState.storage, callerState.code));
-    let encodedCalleeState = encodeAccount((calleeState.nonce, calleeState.balance, calleeState.storage, calleeState.code));
+    let encodedCallerState = encodeAccount((callerState.nonce, callerState.balance, getStorageRoot(callerState.storage), getCodeHash(callerState.code)));
+    let encodedCalleeState = encodeAccount((calleeState.nonce, calleeState.balance, getStorageRoot(calleeState.storage), getCodeHash(calleeState.code)));
     let accounts1 = Trie.put(accounts, key(tx.caller), Blob.equal, encodedCallerState).0;
     let accounts2 = Trie.put(accounts1, key(tx.callee), Blob.equal, encodedCalleeState).0;
     // Add origin and coinbase to accounts => TODO
@@ -240,7 +241,7 @@ module {
     var trie = MPTrie.init();
     let iter = Trie.iter(storage);
     for ((k,v) in iter) {
-      MPTrie.put(trie, K.fromKeyBytes(k), V.fromArray(v));
+      trie := MPTrie.put(trie, K.fromKeyBytes(k), V.fromArray(v));
     };
     MPTrie.hash(trie);
   };
@@ -1087,7 +1088,39 @@ module {
     };
   };
 
-  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(i)) {
+        // add code here
+        let array1 = Blob.toArray(exCon.calldata);
+        let array2 = Array.freeze<Nat8>(Array.init<Nat8>(32, 0));
+        let array3 = Array.append<Nat8>(array1, array2);
+        var array4 = Array.init<Nat8>(32, 0);
+        if (i < array1.size()) {
+          array4 := Array.thaw<Nat8>(Array.subArray<Nat8>(array3, i, 32));
+        };
+        var pos: Nat = 32;
+        var result: Nat = 0;
+        for (byte: Nat8 in array4.vals()) {
+          pos -= 1;
+          result += Nat8.toNat(byte) * (256 ** pos);
+        }; 
+        switch (exVar.stack.push(result)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.calldata.size())) {
@@ -1138,7 +1171,6 @@ module {
     };
   };
 
-  // TODO - scan through exVar.codeAdditions
   let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let addressBuffer = Buffer.Buffer<Nat8>(20);
     switch (exVar.stack.pop()) {
@@ -1150,23 +1182,35 @@ module {
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
         var extCodeSize = 0;
+        var codeHash = "" : Blob;
         switch (accountData) {
           case (null) {};
           case (?data) {
             let decodedData = decodeAccount(data);
-            let code = decodedData.3;
-            extCodeSize := code.size();
+            codeHash := decodedData.3;
+            let code = Map.get(exVar.codeStore, bhash, codeHash);
+            switch (code) {
+              case (null) {};
+              case (?code_) {
+                extCodeSize := code_.size();
+              };
+            };
           };
         };
-        // To be utilised once codeHash is implemented within accounts
-        /*
+        // Check for any changes during the current execution
         for (change in Map.entries(exVar.codeAdditions)) {
-          if (change.0 == decoded Trie.get(exCon.accounts, key address, Blob.equal).3) {
-            get extCodeSize from change.1.newValue then
-            repeat the search using change.1.key
+          if (change.0 == codeHash) {
+            switch (change.1.newValue) {
+              case (null) {
+                extCodeSize := 0;
+              };
+              case (?newCode) {
+                extCodeSize := newCode.size();
+                codeHash := getCodeHash(newCode);
+              };
+            };
           };
         };
-        */
         switch (exVar.stack.push(extCodeSize)) {
           case (#err(e)) { return #err(e) };
           case (#ok(_)) {};
@@ -1315,7 +1359,6 @@ module {
     };
   };
 
-  // TODO - scan through exVar.balanceChanges
   let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let address = exCon.caller;
     let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
@@ -1408,7 +1451,7 @@ module {
   let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     // check that there are enough operands
     if (Array.size(exCon.code) < exVar.programCounter + 2) {return #err("Not enough operands")};
-    switch (exVar.stack.push(Nat8.toNat(exCon.code[exVar.programCounter + 1].0))) {
+    switch (exVar.stack.push(Nat8.toNat(exCon.code[exVar.programCounter + 1]))) {
       case (#err(e)) { return #err(e) };
       case (#ok(())) {
         exVar.programCounter += 1;
@@ -1428,7 +1471,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1450,7 +1493,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1472,7 +1515,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1494,7 +1537,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1516,7 +1559,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1538,7 +1581,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1560,7 +1603,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1582,7 +1625,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1604,7 +1647,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1626,7 +1669,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1648,7 +1691,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1670,7 +1713,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1692,7 +1735,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1714,7 +1757,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1736,7 +1779,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1758,7 +1801,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1780,7 +1823,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1802,7 +1845,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1824,7 +1867,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1846,7 +1889,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1868,7 +1911,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1890,7 +1933,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1912,7 +1955,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1934,7 +1977,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1956,7 +1999,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -1978,7 +2021,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2000,7 +2043,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2022,7 +2065,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2044,7 +2087,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2066,7 +2109,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2088,7 +2131,7 @@ module {
     if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i].0) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
