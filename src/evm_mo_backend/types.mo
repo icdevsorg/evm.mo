@@ -35,6 +35,8 @@ module {
   };
 
   public type CodeChange = {
+    // Key uses hash of (address + original code), or getCodeHash(Array.append<Nat8>(Blob.toArray(address), originalValue))
+    // TODO - check that code only changes once, as otherwise this might not work.
     key: Blob; // Storage key, typically a 32-byte array.
     originalValue: [OpCode]; // Optional, represents the value before the change. `None` can indicate the slot was empty.
     newValue: ?[OpCode]; // Optional, represents the value after the change. `None` can indicate a deletion.
