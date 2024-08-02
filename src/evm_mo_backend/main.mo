@@ -117,6 +117,7 @@ module {
       var storageStore = Map.new<Blob, Blob>();
       var logs = Vec.new<T.LogEntry>();
       var totalGas = remainingGas;
+      var returnData = null;
     };
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
@@ -150,6 +151,7 @@ module {
           exVar.storageStore := newExVar.storageStore;
           exVar.logs := newExVar.logs;
           exVar.totalGas := newExVar.totalGas;
+          exVar.returnData := newExVar.returnData;
         };
         case (#ok(output)) {
           let newExVar = output;
@@ -165,6 +167,7 @@ module {
           exVar.storageStore := newExVar.storageStore;
           exVar.logs := newExVar.logs;
           exVar.totalGas := newExVar.totalGas;
+          exVar.returnData := newExVar.returnData;
         };
       };
     };
@@ -229,6 +232,7 @@ module {
       var storageStore = Map.new<Blob, Blob>();
       var logs = Vec.new<T.LogEntry>();
       var totalGas = 0;
+      var returnData = null;
     };
     newExVar;
   };
@@ -1164,8 +1168,10 @@ module {
                   let new_memory_size_word = (new_memory_byte_size + 31) / 32;
                   new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                 };
-                for (i in Iter.range(0, size - 1)) {
-                  Vec.put(exVar.memory, destOffset + i, array4[i]);
+                if (size > 0) {
+                  for (i in Iter.range(0, size - 1)) {
+                    Vec.put(exVar.memory, destOffset + i, array4[i]);
+                  };
                 };
                 let memory_expansion_cost = new_memory_cost - memory_cost;
                 let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
@@ -1226,8 +1232,10 @@ module {
                   let new_memory_size_word = (new_memory_byte_size + 31) / 32;
                   new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                 };
-                for (i in Iter.range(0, size - 1)) {
-                  Vec.put(exVar.memory, destOffset + i, array4[i]);
+                if (size > 0) {
+                  for (i in Iter.range(0, size - 1)) {
+                    Vec.put(exVar.memory, destOffset + i, array4[i]);
+                  };
                 };
                 let memory_expansion_cost = new_memory_cost - memory_cost;
                 let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
@@ -1410,9 +1418,88 @@ module {
     };
   };
 
-  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    var returnDataSize = 0;
+    switch (exVar.returnData) {
+      case (null) {};
+      case (?data) {
+        returnDataSize := data.size();
+      };
+    };
+    switch (exVar.stack.push(returnDataSize)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    var returnData = "" : Blob;
+    var returnDataSize = 0;
+    switch (exVar.returnData) {
+      case (null) {};
+      case (?data) {
+        returnData := data;
+        returnDataSize := data.size();
+      };
+    };
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(destOffset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(offset)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(size)) {
+                if (offset + size > returnDataSize) {
+                  return #err("offset + size is larger than RETURNDATASIZE")
+                };
+                let array1 = Blob.toArray(returnData);
+                let array2 = Array.freeze<Nat8>(Array.init<Nat8>(size, 0));
+                let array3 = Array.append<Nat8>(array1, array2);
+                var array4 = Array.init<Nat8>(size, 0);
+                if (offset < array1.size()) {
+                  array4 := Array.thaw<Nat8>(Array.subArray<Nat8>(array3, offset, size));
+                };
+                let memory_byte_size = Vec.size(exVar.memory);
+                let memory_size_word = (memory_byte_size + 31) / 32;
+                let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                var new_memory_cost = memory_cost;
+                var new_memory_byte_size = memory_byte_size;
+                if (destOffset + size > memory_byte_size) {
+                  new_memory_byte_size := destOffset + size;
+                  Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+                  let new_memory_size_word = (new_memory_byte_size + 31) / 32;
+                  new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                };
+                if (size > 0) {
+                  for (i in Iter.range(0, size - 1)) {
+                    Vec.put(exVar.memory, destOffset + i, array4[i]);
+                  };
+                };
+                let memory_expansion_cost = new_memory_cost - memory_cost;
+                let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar);
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {

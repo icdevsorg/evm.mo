@@ -95,6 +95,7 @@ module {
     var storageStore: Map<Blob, Blob>;
     var logs: Logs;
     var totalGas: Nat;
+    var returnData: ?Blob;
   };
 
   public type Transaction = {
