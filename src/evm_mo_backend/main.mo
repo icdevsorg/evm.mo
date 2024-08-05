@@ -978,7 +978,7 @@ module {
   // Environmental Information and Block Information
 
   let op_30_ADDRESS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
-    var pos: Nat = 32;
+    var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.callee.vals()) {
       pos -= 1;
@@ -1004,7 +1004,7 @@ module {
       case (#ok(addressNat)) {
         let addressBuffer = Buffer.Buffer<Nat8>(20);
         for (i in Iter.revRange(19, 0)) {
-          addressBuffer.add(Nat8.fromNat(addressNat / (256 ** Int.abs(i))));
+          addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
         };
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
@@ -1036,7 +1036,7 @@ module {
   };
   
   let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
-    var pos: Nat = 32;
+    var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.origin.vals()) {
       pos -= 1;
@@ -1057,7 +1057,7 @@ module {
   };
 
   let op_33_CALLER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
-    var pos: Nat = 32;
+    var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.caller.vals()) {
       pos -= 1;
@@ -1591,7 +1591,7 @@ module {
   };
 
   let op_41_COINBASE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
-    var pos: Nat = 32;
+    var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.blockInfo.coinbase.vals()) {
       pos -= 1;

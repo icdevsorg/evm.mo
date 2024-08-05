@@ -10,9 +10,9 @@ module {
 
     let buffer = Buffer.Buffer<RLPTypes.Input>(4);
 
-    let input1: RLPTypes.Input = #number(balance);
+    let input1: RLPTypes.Input = #number(nonce);
 
-    let input2: RLPTypes.Input = #number(nonce);
+    let input2: RLPTypes.Input = #number(balance);
 
     let storageIter = storageRoot.vals();
     let input3: RLPTypes.Input = #Uint8Array(Buffer.fromIter<Nat8>(storageIter));
