@@ -36,9 +36,11 @@ let dummyBlockInfo: T.BlockInfo = {
     blockGasLimit = 30_000_000;
     blockDifficulty = 1_000_000_000_000;
     blockTimestamp = 1_500_000_000;
-    blockCoinbase = "\00\ff";
+    blockCoinbase = "\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc";
     chainId = 1;
 };
+
+let hash999999 = "\ac\dc\46\01\86\f7\23\3c\92\7e\7d\b2\dc\c7\03\c0\e5\00\b6\53\ca\82\27\3b\7b\fa\d8\04\5d\85\a4\70" : Blob;
 
 func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     let context = await stateTransition(
@@ -51,7 +53,7 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
             storage = Trie.empty();
         }, // calleeState
         5, // gasPrice
-        [], // blockHashes
+        [(999_999, hash999999)], // blockHashes
         Trie.empty(), // accounts
         dummyBlockInfo
     );
@@ -721,25 +723,118 @@ await test(
 });
 
 // 3D RETURNDATASIZE
+// TODO - requires Execution and System Operations functions to be in place
 
 // 3E RETURNDATACOPY
+// TODO - requires Execution and System Operations functions to be in place
 
 // 3F EXTCODEHASH
+/* Debugging still needed
+await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : async () {
+    let context = await testOpCodes(
+        [0x73,                          // PUSH20
+        0x00, 0xaa, 0x00, 0xaa, 0x00,   // 00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa
+        0xaa, 0x00, 0xaa, 0x00, 0xaa,
+        0x00, 0xaa, 0x00, 0xaa, 0x00,
+        0xaa, 0x00, 0xaa, 0x00, 0xaa,
+        0x3f]                           // EXTCODEHASH
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    // should return the empty hash
+    assert(result == [0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470]);
+});
+*/
 
 // 40 BLOCKHASH
+await test("BLOCKHASH: 999999", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x0f, 0x42, 0x3f,    // 0f423f
+        0x40]                // BLOCKHASH
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0xacdc460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470]);
+});
 
 // 41 COINBASE
+await test("CALLER", func() : async () {
+    let context = await testOpCodes(
+        [0x41]    // COINBASE
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0x00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc]);
+});
 
 // 42 TIMESTAMP
+await test("TIMESTAMP", func() : async () {
+    let context = await testOpCodes(
+        [0x42]    // TIMESTAMP
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [1_500_000_000]);
+});
 
 // 43 NUMBER
+await test("NUMBER", func() : async () {
+    let context = await testOpCodes(
+        [0x43]    // NUMBER
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [1_000_000]);
+});
 
 // 44 DIFFICULTY
+await test("DIFFICULTY", func() : async () {
+    let context = await testOpCodes(
+        [0x44]    // DIFFICULTY
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [1_000_000_000_000]);
+});
 
 // 45 GASLIMIT
+await test("CALLER", func() : async () {
+    let context = await testOpCodes(
+        [0x45]    // GASLIMIT
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [30_000_000]);
+});
 
 // 46 CHAINID
+await test("CHAINID", func() : async () {
+    let context = await testOpCodes(
+        [0x46]    // CHAINID
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [1]);
+});
 
 // 47 SELFBALANCE
+await test("SELFBALANCE", func() : async () {
+    let context = await testOpCodes(
+        [0x47]    // SELFBALANCE
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [50000 - 2000 * 5 - 123]);
+});
 
 // 48 BASEFEE
+// Base fee has not been included in the defined execution context.
+await test("BASEFEE", func() : async () {
+    let context = await testOpCodes(
+        [0x48]    // BASEFEE
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0]);
+});

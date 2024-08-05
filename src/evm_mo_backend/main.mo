@@ -45,8 +45,8 @@ module {
     let accounts2 = Trie.put(accounts1, key(tx.callee), Blob.equal, encodedCalleeState).0;
     // Add codeHash to codeStore for each account
     let codeStore = Map.new<Blob, [T.OpCode]>();
-    Map.set(codeStore, bhash, encodedCallerState.4, callerState.code);
-    Map.set(codeStore, bhash, encodedCalleeState.4, calleeState.code);
+    Map.set(codeStore, bhash, getCodeHash(callerState.code), callerState.code);
+    Map.set(codeStore, bhash, getCodeHash(calleeState.code), calleeState.code);
     // TODO - Add storageRoot to storageStore for each account
     // Add origin and coinbase to accounts => TODO
     // Check Transaction has right number of values => will trap if not
@@ -92,7 +92,7 @@ module {
       storageChanges = [];
       codeAdditions = []; 
       blockHashes = blockHashes; 
-      codeStore = Map.toArray<Blob, [T.OpCode]>(exVar.codeStore); 
+      codeStore = Map.toArray<Blob, [T.OpCode]>(codeStore); 
       storageStore = [];
       accounts = accounts2; 
       logs = []; 
@@ -1646,7 +1646,7 @@ module {
     };
   };
 
-  let op_44_PREVRANDAO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_44_DIFFICULTY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.blockInfo.difficulty)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -2723,7 +2723,7 @@ module {
     op_38_CODESIZE, op_39_CODECOPY, op_3A_GASPRICE, op_3B_EXTCODESIZE,
     op_3C_EXTCODECOPY, op_3D_RETURNDATASIZE, op_3E_RETURNDATACOPY,
     op_3F_EXTCODEHASH, op_40_BLOCKHASH, op_41_COINBASE, op_42_TIMESTAMP,
-    op_43_NUMBER, op_44_PREVRANDAO, op_45_GASLIMIT, op_46_CHAINID,
+    op_43_NUMBER, op_44_DIFFICULTY, op_45_GASLIMIT, op_46_CHAINID,
     op_47_SELFBALANCE, op_48_BASEFEE, op_49_BLOBHASH, op_4A_BLOBBASEFEE, op_4B_,
     op_4C_, op_4D_, op_4E_, op_4F_, op_50_POP, op_51_MLOAD, op_52_MSTORE,
     op_53_MSTORE8, op_54_SLOAD, op_55_SSTORE, op_56_JUMP, op_57_JUMPI, op_58_PC,
