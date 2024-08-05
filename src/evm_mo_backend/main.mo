@@ -43,6 +43,11 @@ module {
     let encodedCalleeState = encodeAccount((calleeState.nonce, calleeState.balance, getStorageRoot(calleeState.storage), getCodeHash(calleeState.code)));
     let accounts1 = Trie.put(accounts, key(tx.caller), Blob.equal, encodedCallerState).0;
     let accounts2 = Trie.put(accounts1, key(tx.callee), Blob.equal, encodedCalleeState).0;
+    // Add codeHash to codeStore for each account
+    let codeStore = Map.new<Blob, [T.OpCode]>();
+    Map.set(codeStore, bhash, encodedCallerState.4, callerState.code);
+    Map.set(codeStore, bhash, encodedCalleeState.4, calleeState.code);
+    // TODO - Add storageRoot to storageStore for each account
     // Add origin and coinbase to accounts => TODO
     // Check Transaction has right number of values => will trap if not
     // Check signature is valid => not applicable for this version
@@ -87,7 +92,7 @@ module {
       storageChanges = [];
       codeAdditions = []; 
       blockHashes = blockHashes; 
-      codeStore = []; 
+      codeStore = Map.toArray<Blob, [T.OpCode]>(exVar.codeStore); 
       storageStore = [];
       accounts = accounts2; 
       logs = []; 
@@ -113,7 +118,7 @@ module {
       var balanceChanges = balanceChanges; 
       var storageChanges = Map.new<Blob, T.StorageSlotChange>();
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
-      var codeStore = Map.new<Blob, [T.OpCode]>(); 
+      var codeStore = codeStore;//Map.new<Blob, [T.OpCode]>(); 
       var storageStore = Map.new<Blob, Blob>();
       var logs = Vec.new<T.LogEntry>();
       var totalGas = remainingGas;
@@ -1274,7 +1279,7 @@ module {
       case (#ok(addressNat)) {
         let addressBuffer = Buffer.Buffer<Nat8>(20);
         for (i in Iter.revRange(19, 0)) {
-          addressBuffer.add(Nat8.fromNat(addressNat / (256 ** Int.abs(i))));
+          addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
         };
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
@@ -1332,7 +1337,7 @@ module {
       case (#ok(addressNat)) {
         let addressBuffer = Buffer.Buffer<Nat8>(20);
         for (i in Iter.revRange(19, 0)) {
-          addressBuffer.add(Nat8.fromNat(addressNat / (256 ** Int.abs(i))));
+          addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
         };
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
@@ -1507,7 +1512,7 @@ module {
       case (#ok(addressNat)) {
         let addressBuffer = Buffer.Buffer<Nat8>(20);
         for (i in Iter.revRange(19, 0)) {
-          addressBuffer.add(Nat8.fromNat(addressNat / (256 ** Int.abs(i))));
+          addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
         };
         let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
         let accountData = Trie.get(exCon.accounts, key address, Blob.equal);

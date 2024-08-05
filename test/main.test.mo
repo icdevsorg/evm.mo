@@ -683,8 +683,42 @@ await test("GASPRICE", func() : async () {
 });
 
 // 3B EXTCODESIZE
+await test("EXTCODESIZE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : async () {
+    let context = await testOpCodes(
+        [0x73,                          // PUSH20
+        0x00, 0xbb, 0x00, 0xbb, 0x00,   // 00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb
+        0xbb, 0x00, 0xbb, 0x00, 0xbb,
+        0x00, 0xbb, 0x00, 0xbb, 0x00,
+        0xbb, 0x00, 0xbb, 0x00, 0xbb,
+        0x3b]                           // EXTCODESIZE
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [22]);
+});
 
 // 3C EXTCODECOPY
+await test(
+    "EXTCODECOPY: address: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb, destOffset = 0, offset = 3, size = 5",
+    func() : async () {
+    let context = await testOpCodes(
+        [0x69,                        // PUSH10
+        0x01, 0x23, 0x45, 0x67, 0x89, // 0x012345689abcdef0123
+        0xab, 0xcd, 0xef, 0x01, 0x23,
+        0x60, 5,                      // PUSH1 5
+        0x60, 3,                      // PUSH1 3
+        0x5F,                         // PUSH0
+        0x73,                         // PUSH20
+        0x00, 0xbb, 0x00, 0xbb, 0x00, // 00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb
+        0xbb, 0x00, 0xbb, 0x00, 0xbb,
+        0x00, 0xbb, 0x00, 0xbb, 0x00,
+        0xbb, 0x00, 0xbb, 0x00, 0xbb,
+        0x3c]                         // EXTCODECOPY
+    );
+    let result = context.memory;
+    Debug.print(debug_show(result));
+    assert(result == [0x45, 0x67, 0x89, 0xab, 0xcd]);
+});
 
 // 3D RETURNDATASIZE
 
