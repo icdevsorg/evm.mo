@@ -68,6 +68,7 @@ Debug.print(">  Basic Math and Bitwise Logic");
 Debug.print(">");
 Debug.print(">");
 
+// 01 ADD
 await test("ADD: 1 + 2", func() : async () {
     let context = await testOpCodes(
         [0x60, 2, 0x60, 1, 0x01] // PUSH1 2 PUSH1 1 ADD
@@ -104,6 +105,7 @@ await test("ADD: stack should underflow", func() : async () {
     assert(result == []);
 });
 
+// 02 MUL
 await test("MUL: 1000 * 2000", func() : async () {
     let context = await testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
@@ -117,21 +119,22 @@ await test("MUL: 1000 * 2000", func() : async () {
 
 await test("MUL: (2**80-6) * (2**160-6)", func() : async () {
     let context = await testOpCodes(
-        [0x73, // PUSH20 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA
+        [0x73,             // PUSH20 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFA,
-        0x69, // PUSH10 0xFFFFFFFFFFFFFFFFFFFA
+        0x69,             // PUSH10 0xFFFFFFFFFFFFFFFFFFFA
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFA, 
-        0x02] // MUL
+        0x02]             // MUL
     );
     let result = context.stack;
     Debug.print(debug_show(result));
     assert(result == [0xfffffffffffffffffff9fffffffffffffffffffa00000000000000000024]);
 });
 
+// 03 SUB
 await test("SUB: 8 - 20", func() : async () {
     let context = await testOpCodes(
         [0x60, 20, 0x60, 8, 0x03] // PUSH1 20 PUSH1 8 SUB
@@ -141,6 +144,7 @@ await test("SUB: 8 - 20", func() : async () {
     assert(result == [(2**256 - 12)]);
 });
 
+// 04 DIV
 await test("DIV: 20 / 3", func() : async () {
     let context = await testOpCodes(
         [0x60, 3, 0x60, 20, 0x04] // PUSH1 3 PUSH1 20 DIV
@@ -159,6 +163,7 @@ await test("DIV: 4 / 0", func() : async () {
     assert(result == [0]);
 });
 
+// 05 SDIV
 await test("SDIV: 10 / -2", func() : async () {
     let context = await testOpCodes(
         [0x7F,      // PUSH32
@@ -177,23 +182,25 @@ await test("SDIV: 10 / -2", func() : async () {
     assert(result == [0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb]);
 });
 
+// 06 MOD
 await test("MOD: (2**160-5) % (2**80-127)", func() : async () {
     let context = await testOpCodes(
-        [0x69, // PUSH10 0xFFFFFFFFFFFFFFFFFF81
+        [0x69,         // PUSH10 0xFFFFFFFFFFFFFFFFFF81
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0x81,
-        0x73,  // PUSH20 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB
+        0x73,          // PUSH20 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFB, 
-        0x06]  // MOD
+        0x06]          // MOD
     );
     let result = context.stack;
     Debug.print(debug_show(result));
     assert(result == [0x3efc]);
 });
 
+// 07 SMOD
 await test("SMOD: 10 % -3", func() : async () {
     let context = await testOpCodes(
         [0x7F,      // PUSH32
@@ -237,6 +244,7 @@ await test("SMOD: -10 % -3", func() : async () {
     assert(result == [0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe]); // -2
 });
 
+// 08 ADDMOD
 await test("ADDMOD: ((2**256 - 1) + 20) % 8", func() : async () {
     let context = await testOpCodes(
         [0x60, 8,   // PUSH1 8
@@ -256,10 +264,11 @@ await test("ADDMOD: ((2**256 - 1) + 20) % 8", func() : async () {
     assert(result == [3]);
 });
 
+// 09 MULMOD
 await test("MULMOD: ((2**256-1) * (2**256-2)) % 12", func() : async () {
     let context = await testOpCodes(
         [0x60, 12,  // PUSH1 12
-        0x7F,              // PUSH32
+        0x7F,       // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -282,6 +291,7 @@ await test("MULMOD: ((2**256-1) * (2**256-2)) % 12", func() : async () {
     assert(result == [6]);
 });
 
+// 0A EXP
 await test("EXP: 10 ** 20", func() : async () {
     let context = await testOpCodes(
         [0x60, 20, // PUSH2 20
@@ -329,6 +339,7 @@ await test("EXP: 0xD3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
     assert(result == [0x479dbf07c921bcfbea701ae69aa74de4c0efa9e82a4257f644b3480e1393a393]);
 });
 
+// 0B SIGNEXTEND
 await test("SIGNEXTEND: 4 bytes, 0xFF123456", func() : async () {
     let context = await testOpCodes(
         [0x63,                  // PUSH4
@@ -341,6 +352,7 @@ await test("SIGNEXTEND: 4 bytes, 0xFF123456", func() : async () {
     assert(result == [0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff123456]);
 });
 
+// 10 LT
 await test("LT: 1000 < 2000 (true)", func() : async () {
     let context = await testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
@@ -352,6 +364,7 @@ await test("LT: 1000 < 2000 (true)", func() : async () {
     assert(result == [1]);
 });
 
+// 11 GT
 await test("GT: 1000 > 2000 (false)", func() : async () {
     let context = await testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
@@ -363,6 +376,7 @@ await test("GT: 1000 > 2000 (false)", func() : async () {
     assert(result == [0]);
 });
 
+// 12 SLT
 await test("SLT: 1000 < -2000 (false)", func() : async () {
     let context = await testOpCodes(
         [0x7F,      // PUSH32
@@ -382,6 +396,7 @@ await test("SLT: 1000 < -2000 (false)", func() : async () {
     assert(result == [0]);
 });
 
+// 13 SGT
 await test("SGT: 1000 > -2000 (true)", func() : async () {
     let context = await testOpCodes(
         [0x7F,       // PUSH32
@@ -401,6 +416,7 @@ await test("SGT: 1000 > -2000 (true)", func() : async () {
     assert(result == [1]);
 });
 
+// 14 EQ
 await test("EQ: 1000 == 2000 (false)", func() : async () {
     let context = await testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
@@ -423,6 +439,7 @@ await test("EQ: 1000 == 1000 (true)", func() : async () {
     assert(result == [1]);
 });
 
+// 15 ISZERO
 await test("ISZERO: 1000 (false)", func() : async () {
     let context = await testOpCodes(
         [0x61, 0x03, 0xE8, // PUSH2 0x03E8
@@ -443,6 +460,7 @@ await test("ISZERO: 0 (true)", func() : async () {
     assert(result == [1]);
 });
 
+// 16 AND
 await test("AND: 0xFF00FF & 0xF0F0F0", func() : async () {
     let context = await testOpCodes(
         [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
@@ -454,6 +472,7 @@ await test("AND: 0xFF00FF & 0xF0F0F0", func() : async () {
     assert(result == [0xf000f0]);
 });
 
+// 17 OR
 await test("OR: 0xFF00FF | 0xF0F0F0", func() : async () {
     let context = await testOpCodes(
         [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
@@ -465,6 +484,7 @@ await test("OR: 0xFF00FF | 0xF0F0F0", func() : async () {
     assert(result == [0xfff0ff]);
 });
 
+// 18 XOR
 await test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : async () {
     let context = await testOpCodes(
         [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
@@ -476,6 +496,7 @@ await test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : async () {
     assert(result == [0x0ff00f]);
 });
 
+// 19 NOT
 await test("NOT: ~ 0xF0F0F0", func() : async () {
     let context = await testOpCodes(
         [0x62, 0xF0, 0xF0, 0xF0, // PUSH3 0xF0F0F0
@@ -486,6 +507,7 @@ await test("NOT: ~ 0xF0F0F0", func() : async () {
     assert(result == [0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0f0f0f]);
 });
 
+// 1A BYTE
 await test("BYTE: 0xF1F2F3, offset = 30", func() : async () {
     let context = await testOpCodes(
         [0x62, 0xF1, 0xF2, 0xF3, // PUSH3 0xF1F2F3
@@ -497,6 +519,7 @@ await test("BYTE: 0xF1F2F3, offset = 30", func() : async () {
     assert(result == [0xf2]);
 });
 
+// 1B SHL
 await test("SHL: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : async () {
     let context = await testOpCodes(
         [0x7F,             // PUSH32
@@ -515,6 +538,7 @@ await test("SHL: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
     assert(result == [0xf00fffffffffffffffffffffffffffffffffffffffffffffffffffffffffe380]);
 });
 
+// 1C SHR
 await test("SHR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : async () {
     let context = await testOpCodes(
         [0x7F,             // PUSH32
@@ -533,6 +557,7 @@ await test("SHR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
     assert(result == [0xff00fffffffffffffffffffffffffffffffffffffffffffffffffffffffffe3]);
 });
 
+// 1D SAR
 await test("SAR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : async () {
     let context = await testOpCodes(
         [0x7F,             // PUSH32
@@ -699,6 +724,20 @@ await test("EXTCODESIZE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : a
     assert(result == [22]);
 });
 
+await test("EXTCODESIZE: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : async () {
+    let context = await testOpCodes(
+        [0x73,                          // PUSH20
+        0x00, 0xaa, 0x00, 0xaa, 0x00,   // 00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa
+        0xaa, 0x00, 0xaa, 0x00, 0xaa,
+        0x00, 0xaa, 0x00, 0xaa, 0x00,
+        0xaa, 0x00, 0xaa, 0x00, 0xaa,
+        0x3b]                           // EXTCODESIZE
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0]);
+});
+
 // 3C EXTCODECOPY
 await test(
     "EXTCODECOPY: address: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb, destOffset = 0, offset = 3, size = 5",
@@ -729,7 +768,6 @@ await test(
 // TODO - requires Execution and System Operations functions to be in place
 
 // 3F EXTCODEHASH
-/* Debugging still needed
 await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : async () {
     let context = await testOpCodes(
         [0x73,                          // PUSH20
@@ -742,9 +780,8 @@ await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : a
     let result = context.stack;
     Debug.print(debug_show(result));
     // should return the empty hash
-    assert(result == [0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470]);
+    assert(result == [0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855]);
 });
-*/
 
 // 40 BLOCKHASH
 await test("BLOCKHASH: 999999", func() : async () {

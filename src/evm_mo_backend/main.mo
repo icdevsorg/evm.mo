@@ -1548,7 +1548,7 @@ module {
         if (addressExists) {
           for (val in codeHash.vals()) {
             pos -= 1;
-            codeHashNat += Nat8.toNat(val) * (2 ** pos);
+            codeHashNat += Nat8.toNat(val) * (256 ** pos);
           };
         };
         switch (exVar.stack.push(codeHashNat)) {
