@@ -1738,11 +1738,92 @@ module {
   // Memory Operations
   // (Consider comparing Map and Trie types)
 
-  let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(y)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar); };
+      };
+    };
+  };
 
-  let op_51_MLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_51_MLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        let memory_byte_size = Vec.size(exVar.memory);
+        let memory_size_word = (memory_byte_size + 31) / 32;
+        let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+        var new_memory_cost = memory_cost;
+        var new_memory_byte_size = memory_byte_size;
+        if (offset > memory_byte_size) {
+          new_memory_byte_size := offset;
+          Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+          let new_memory_size_word = (new_memory_byte_size + 31) / 32;
+          new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+        };
+        let result = Nat8.toNat(Vec.get(exVar.memory, offset));
+        switch (exVar.stack.push(result)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            let memory_expansion_cost = new_memory_cost - memory_cost;
+            let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_52_MSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_52_MSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(value)) {
+            let valueBuffer = Buffer.Buffer<Nat8>(32);
+            for (i in Iter.revRange(31, 0)) {
+              valueBuffer.add(Nat8.fromNat((value % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+            };
+            let valueArray = Buffer.toArray<Nat8>(valueBuffer);
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            var new_memory_byte_size = memory_byte_size;
+            if (offset + 32 > memory_byte_size) {
+              new_memory_byte_size := memory_byte_size + 32;
+              Vec.addMany(exVar.memory, 32, Nat8.fromNat(0));
+              let new_memory_size_word = (new_memory_byte_size + 31) / 32;
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            for (i in Iter.range(0, 31)) {
+              Vec.put(exVar.memory, offset + i, valueArray[i]);
+            };
+            let memory_expansion_cost = new_memory_cost - memory_cost;
+            let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_53_MSTORE8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
