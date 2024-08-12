@@ -8,6 +8,7 @@ import Blob "mo:base/Blob";
 import Trie "mo:base/Trie";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
+import Option "mo:base/Option";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import { bhash } "mo:map/Map";
@@ -47,8 +48,8 @@ module {
     let codeStore = Map.new<Blob, [T.OpCode]>();
     Map.set(codeStore, bhash, getCodeHash(callerState.code), callerState.code);
     Map.set(codeStore, bhash, getCodeHash(calleeState.code), calleeState.code);
-    // TODO - Add storageRoot to storageStore for each account
-    // Add origin and coinbase to accounts => TODO
+    // TODO? - Add storageRoot to storageStore for each account
+    // TODO - Add origin and coinbase to accounts
     // Check Transaction has right number of values => will trap if not
     // Check signature is valid => not applicable for this version
     // Check that nonce matches nonce in sender's account => TODO
@@ -250,7 +251,7 @@ module {
     var trie = MPTrie.init();
     let iter = Trie.iter(storage);
     for ((k,v) in iter) {
-      trie := MPTrie.put(trie, K.fromKeyBytes(k), V.fromArray(v));
+      trie := MPTrie.put(trie, K.fromKeyBytes(Blob.toArray(k)), V.fromArray(v));
     };
     MPTrie.hash(trie);
   };
@@ -1756,8 +1757,8 @@ module {
         let memory_size_word = (memory_byte_size + 31) / 32;
         let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
         var new_memory_cost = memory_cost;
-        if (offset > memory_byte_size) {
-          let new_memory_size_word = (offset + 31) / 32;
+        if (offset +32 > memory_byte_size) {
+          let new_memory_size_word = (offset + 32 + 31) / 32;
           let new_memory_byte_size = new_memory_size_word * 32;
           Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
           new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
@@ -1819,11 +1820,156 @@ module {
     };
   };
 
-  let op_53_MSTORE8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_53_MSTORE8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(value)) {
+            let valueMod = Nat8.fromNat(value % 256);
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + 32 > memory_byte_size) {
+              let new_memory_size_word = (offset + 32 + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, 32, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            Vec.put(exVar.memory, offset, valueMod);
+            let memory_expansion_cost = new_memory_cost - memory_cost;
+            let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_54_SLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_54_SLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(keyNat)) {
+        let keyBuffer = Buffer.Buffer<Nat8>(32);
+        for (i in Iter.revRange(31, 0)) {
+          keyBuffer.add(Nat8.fromNat((keyNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        let key_ = Blob.fromArray(Buffer.toArray<Nat8>(keyBuffer));
+        let storageValueOpt = Trie.get(exVar.contractStorage, key key_, Blob.equal);
+        var storageValue = Array.init<Nat8>(0, 0);
+        var result: Nat = 0;
+        var keyExists = false;
+        switch (storageValueOpt) {
+          case (null) {};
+          case (?value) {
+            storageValue := Array.thaw<Nat8>(value);
+            keyExists := true;
+          };
+        };
+        // Check for any changes during the current execution
+        for (change in Map.entries(exVar.storageChanges)) {
+          if (change.0 == key_) {
+            switch (change.1.newValue) {
+              case (null) {};
+              case (?value) {
+                storageValue := Array.thaw<Nat8>(value);
+                keyExists := true;
+              };
+            };
+          };
+        };
+        if (keyExists) {
+          var pos: Nat = 32;
+          for (byte: Nat8 in storageValue.vals()) {
+            pos -= 1;
+            result += Nat8.toNat(byte) * (256 ** pos);
+          };
+        };
+        switch (exVar.stack.push(result)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(_)) {
+            let newGas: Int = exVar.totalGas - 100; // warm/cold address distinction not in this version
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_55_SSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_55_SSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(keyNat)) {
+        let keyBuffer = Buffer.Buffer<Nat8>(32);
+        for (i in Iter.revRange(31, 0)) {
+          keyBuffer.add(Nat8.fromNat((keyNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        let key_ = Blob.fromArray(Buffer.toArray<Nat8>(keyBuffer));
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(value)) {
+            let valueBuffer = Buffer.Buffer<Nat8>(32);
+            for (i in Iter.revRange(31, 0)) {
+              valueBuffer.add(Nat8.fromNat((value % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+            };
+            let valueArray = Buffer.toArray<Nat8>(valueBuffer);
+            var originalValueOpt = Trie.get(exVar.contractStorage, key key_, Blob.equal); // type ?[Nat8]
+            var originalValue = Array.init<Nat8>(0, 0);
+            var storageChangeKey = getCodeHash(Blob.toArray(key_));
+            switch (originalValueOpt) {
+              case (null) {};
+              case (?value) {
+                originalValue := Array.thaw<Nat8>(value);
+                // Check for any changes during the current execution
+                storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), value));
+                for (change in Map.entries(exVar.storageChanges)) {
+                  if (change.0 == storageChangeKey) {
+                    switch (change.1.newValue) {
+                      case (null) {}; // This assumes you can't change a storage value to null
+                      case (?newOrigVal) {
+                        originalValue := Array.thaw<Nat8>(newOrigVal);
+                        originalValueOpt := Option.make(newOrigVal);
+                        storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), newOrigVal));
+                      };
+                    };
+                  };
+                };
+              };
+            };
+            let storageSlotChange = {
+              key = key_;
+              originalValue = originalValueOpt;
+              newValue = Option.make(valueArray);
+            };
+            Map.set(exVar.storageChanges, bhash, storageChangeKey, storageSlotChange);
+            let newGas: Int = exVar.totalGas - 100; // warm/cold slot distinction not in this version
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
+  // TODO:
+  //   Apply dyamic gas and gas refunds.
+  //   Update exCon.contractStorage from exVar.storageChanges at end of context.
+  //   Consider updating exVar.contractStorage instead of using exVar.storageChanges.
 
   let op_56_JUMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
@@ -1835,7 +1981,15 @@ module {
 
   let op_5A_GAS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    let newGas: Int = exVar.totalGas - 1;
+    if (newGas < 0) {
+      return #err("Out of gas")
+    } else {
+      exVar.totalGas := Int.abs(newGas);
+      return #ok(exVar);
+    };
+  };
 
 
   // Push Operations, Duplication Operations, Exchange Operations

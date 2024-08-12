@@ -19,7 +19,7 @@ module {
   public type Memory = Vec<Nat8>;
 
   // Represents the EVM storage, mapping 32-byte keys to 32-byte values.
-  public type Storage = Trie.Trie<[Nat8], [Nat8]>; // changed from Map<[Nat8], [Nat8]>
+  public type Storage = Trie<Blob, [Nat8]>; // changed from Map<[Nat8], [Nat8]>
 
   public type LogEntry = {
     topics: [Blob]; // Changed from Vec<Blob>. Topics are usually the hashed event signature and indexed parameters
