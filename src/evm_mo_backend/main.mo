@@ -1166,11 +1166,10 @@ module {
                 let memory_size_word = (memory_byte_size + 31) / 32;
                 let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
                 var new_memory_cost = memory_cost;
-                var new_memory_byte_size = memory_byte_size;
                 if (destOffset + size > memory_byte_size) {
-                  new_memory_byte_size := destOffset + size;
+                  let new_memory_size_word = (destOffset + size + 31) / 32;
+                  let new_memory_byte_size = new_memory_size_word * 32;
                   Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
-                  let new_memory_size_word = (new_memory_byte_size + 31) / 32;
                   new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                 };
                 if (size > 0) {
@@ -1230,11 +1229,10 @@ module {
                 let memory_size_word = (memory_byte_size + 31) / 32;
                 let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
                 var new_memory_cost = memory_cost;
-                var new_memory_byte_size = memory_byte_size;
                 if (destOffset + size > memory_byte_size) {
-                  new_memory_byte_size := destOffset + size;
+                  let new_memory_size_word = (destOffset + size + 31) / 32;
+                  let new_memory_byte_size = new_memory_size_word * 32;
                   Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
-                  let new_memory_size_word = (new_memory_byte_size + 31) / 32;
                   new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                 };
                 if (size > 0) {
@@ -1392,11 +1390,10 @@ module {
                     let memory_size_word = (memory_byte_size + 31) / 32;
                     let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
                     var new_memory_cost = memory_cost;
-                    var new_memory_byte_size = memory_byte_size;
                     if (destOffset + size > memory_byte_size) {
-                      new_memory_byte_size := destOffset + size;
+                      let new_memory_size_word = (destOffset + size + 31) / 32;
+                      let new_memory_byte_size = new_memory_size_word * 32;
                       Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
-                      let new_memory_size_word = (new_memory_byte_size + 31) / 32;
                       new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                     };
                     if (size > 0) {
@@ -1478,11 +1475,10 @@ module {
                 let memory_size_word = (memory_byte_size + 31) / 32;
                 let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
                 var new_memory_cost = memory_cost;
-                var new_memory_byte_size = memory_byte_size;
                 if (destOffset + size > memory_byte_size) {
-                  new_memory_byte_size := destOffset + size;
+                  let new_memory_size_word = (destOffset + size + 31) / 32;
+                  let new_memory_byte_size = new_memory_size_word * 32;
                   Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
-                  let new_memory_size_word = (new_memory_byte_size + 31) / 32;
                   new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                 };
                 if (size > 0) {
@@ -1760,11 +1756,10 @@ module {
         let memory_size_word = (memory_byte_size + 31) / 32;
         let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
         var new_memory_cost = memory_cost;
-        var new_memory_byte_size = memory_byte_size;
         if (offset > memory_byte_size) {
-          new_memory_byte_size := offset;
+          let new_memory_size_word = (offset + 31) / 32;
+          let new_memory_byte_size = new_memory_size_word * 32;
           Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
-          let new_memory_size_word = (new_memory_byte_size + 31) / 32;
           new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
         };
         let result = Nat8.toNat(Vec.get(exVar.memory, offset));
@@ -1801,11 +1796,10 @@ module {
             let memory_size_word = (memory_byte_size + 31) / 32;
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
             var new_memory_cost = memory_cost;
-            var new_memory_byte_size = memory_byte_size;
             if (offset + 32 > memory_byte_size) {
-              new_memory_byte_size := memory_byte_size + 32;
+              let new_memory_size_word = (offset + 32 + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
               Vec.addMany(exVar.memory, 32, Nat8.fromNat(0));
-              let new_memory_size_word = (new_memory_byte_size + 31) / 32;
               new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
             };
             for (i in Iter.range(0, 31)) {
