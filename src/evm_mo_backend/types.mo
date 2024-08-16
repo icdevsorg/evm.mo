@@ -85,7 +85,7 @@ module {
   };
 
   public type ExecutionVariables = {
-    var programCounter: Nat;
+    var programCounter: Int;
     var stack: EVMStack;
     var memory: Memory;
     var contractStorage: Storage;
@@ -97,6 +97,7 @@ module {
     var storageStore: Map<Blob, Blob>;
     var logs: Logs;
     var totalGas: Nat;
+    var gasRefund: Nat;
     var returnData: ?Blob;
   };
 

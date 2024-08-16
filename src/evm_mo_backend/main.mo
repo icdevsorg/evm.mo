@@ -2,6 +2,7 @@ import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
+import { equal } "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
 import Blob "mo:base/Blob";
@@ -58,7 +59,7 @@ module {
     // check that caller is willing to pay at gasPrice,
     assert (gasPrice <= tx.gasPriceTx);
     // and determine the sending address from the signature (not in this version).
-    // Subtract the fee from the sender's account balance and increment the sender's nonce. If there is not enough balance to spend, return an error.
+    // Subtract the fee from the sender's account balance and [increment the sender's nonce](TODO). If there is not enough balance to spend, return an error.
     var balanceChanges = Vec.new<T.BalanceChange>();
     assert (fee + tx.incomingEth <= callerState.balance);
     Vec.add(balanceChanges, {
@@ -67,7 +68,7 @@ module {
       amount = fee;
     });
     // Initialize GAS = STARTGAS, and take off a certain quantity of gas per byte to pay for the bytes in the transaction
-    let remainingGas = tx.gasLimitTx; // gas per byte not included in this version
+    // gas per byte not included in this version
     // Transfer the transaction value from the sender's account to the receiving account.
     // Check that ((T.CallerState.balance - fee) > tx.incomingEth) => included above for this version
     Vec.add(balanceChanges, {
@@ -97,7 +98,7 @@ module {
       storageStore = [];
       accounts = accounts2; 
       logs = []; 
-      totalGas = remainingGas;
+      totalGas = tx.gasLimitTx;
       gasRefund = 0;
       returnData = null; 
       blockInfo = {
@@ -122,7 +123,8 @@ module {
       var codeStore = codeStore;//Map.new<Blob, [T.OpCode]>(); 
       var storageStore = Map.new<Blob, Blob>();
       var logs = Vec.new<T.LogEntry>();
-      var totalGas = remainingGas;
+      var totalGas = tx.gasLimitTx;
+      var gasRefund = 0;
       var returnData = null;
     };
 
@@ -138,9 +140,9 @@ module {
 
   func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionContext {
     let codeSize = Array.size(exCon.code);
-    while (exVar.programCounter < codeSize) {
+    while (Int.abs(exVar.programCounter) < codeSize) {
       // get current instruction from code[programCounter]
-      let instruction = exCon.code[exVar.programCounter];
+      let instruction = exCon.code[Int.abs(exVar.programCounter)];
       // execute instruction via OPCODE functions
       switch (engine[Nat8.toNat(instruction)](exCon, exVar)) {
         case (#err(e)) {
@@ -157,6 +159,7 @@ module {
           exVar.storageStore := newExVar.storageStore;
           exVar.logs := newExVar.logs;
           exVar.totalGas := newExVar.totalGas;
+          exVar.gasRefund := newExVar.gasRefund;
           exVar.returnData := newExVar.returnData;
         };
         case (#ok(output)) {
@@ -173,6 +176,7 @@ module {
           exVar.storageStore := newExVar.storageStore;
           exVar.logs := newExVar.logs;
           exVar.totalGas := newExVar.totalGas;
+          exVar.gasRefund := newExVar.gasRefund;
           exVar.returnData := newExVar.returnData;
         };
       };
@@ -189,10 +193,25 @@ module {
     };
     let stack = _stack;
 
+    // implement gas refund
+    let gasSpent = exCon.currentGas - exVar.totalGas;
+    if (exVar.gasRefund > gasSpent / 5) {
+      exVar.gasRefund := gasSpent / 5;
+    };
+    let remainingGas = exVar.totalGas + exVar.gasRefund;
+    let ethRefund = remainingGas * exCon.gasPrice;
+    Vec.add(exVar.balanceChanges, {
+      from = exCon.blockInfo.coinbase;
+      to = exCon.caller;
+      amount = ethRefund;
+    });
+
+    // TODO - Iterate through and apply balance changes to exCon.accounts.
+
     let newExCon: T.ExecutionContext = {
       origin = exCon.origin;
       code = exCon.code;
-      programCounter = exVar.programCounter; 
+      programCounter = Int.abs(exVar.programCounter); 
       stack = stack;
       memory = Vec.toArray<Nat8>(exVar.memory);
       contractStorage = exVar.contractStorage; 
@@ -210,7 +229,7 @@ module {
       accounts = exCon.accounts; 
       logs = Vec.toArray<T.LogEntry>(exVar.logs); 
       totalGas = exVar.totalGas;
-      gasRefund = exCon.gasRefund;
+      gasRefund = exVar.gasRefund;
       returnData = null; 
       blockInfo = exCon.blockInfo;
       calldata = exCon.calldata; 
@@ -238,6 +257,7 @@ module {
       var storageStore = Map.new<Blob, Blob>();
       var logs = Vec.new<T.LogEntry>();
       var totalGas = 0;
+      var gasRefund = 0;
       var returnData = null;
     };
     newExVar;
@@ -1925,23 +1945,26 @@ module {
               valueBuffer.add(Nat8.fromNat((value % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
             };
             let valueArray = Buffer.toArray<Nat8>(valueBuffer);
-            var originalValueOpt = Trie.get(exVar.contractStorage, key key_, Blob.equal); // type ?[Nat8]
+            var originalValueOpt = Trie.get(exCon.contractStorage, key key_, Blob.equal); // type ?[Nat8]
+            var currentValueOpt = Trie.get(exVar.contractStorage, key key_, Blob.equal);
             var originalValue = Array.init<Nat8>(0, 0);
+            var currentValue = Array.init<Nat8>(0, 0);
             var storageChangeKey = getCodeHash(Blob.toArray(key_));
             switch (originalValueOpt) {
               case (null) {};
-              case (?value) {
-                originalValue := Array.thaw<Nat8>(value);
+              case (?origVal) {
+                originalValue := Array.thaw<Nat8>(origVal);
+                currentValue := Array.thaw<Nat8>(origVal);
                 // Check for any changes during the current execution
-                storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), value));
+                storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), origVal));
                 for (change in Map.entries(exVar.storageChanges)) {
                   if (change.0 == storageChangeKey) {
                     switch (change.1.newValue) {
                       case (null) {}; // This assumes you can't change a storage value to null
-                      case (?newOrigVal) {
-                        originalValue := Array.thaw<Nat8>(newOrigVal);
-                        originalValueOpt := Option.make(newOrigVal);
-                        storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), newOrigVal));
+                      case (?newCurVal) {
+                        currentValue := Array.thaw<Nat8>(newCurVal);
+                        currentValueOpt := Option.make(newCurVal);
+                        storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), newCurVal));
                       };
                     };
                   };
@@ -1950,11 +1973,51 @@ module {
             };
             let storageSlotChange = {
               key = key_;
-              originalValue = originalValueOpt;
+              originalValue = currentValueOpt;
               newValue = Option.make(valueArray);
             };
             Map.set(exVar.storageChanges, bhash, storageChangeKey, storageSlotChange);
-            let newGas: Int = exVar.totalGas - 100; // warm/cold slot distinction not in this version
+            exVar.contractStorage := Trie.put(exVar.contractStorage, key(key_), Blob.equal, valueArray).0;
+            // implement dynamic gas cost
+            var dynamicGas = 100;
+            if (Array.equal(valueArray, Array.freeze<Nat8>(currentValue), equal)) {
+              dynamicGas := 100;
+            } else {
+              if (Array.equal(Array.freeze<Nat8>(currentValue), Array.freeze<Nat8>(originalValue), equal)) {
+                if (Array.equal(Array.freeze<Nat8>(originalValue), [], equal)) {
+                  dynamicGas := 20000;
+                } else {
+                  dynamicGas := 2900;
+                };
+              };
+            };
+            // calculate gas refunds
+            if (not (Array.equal(valueArray, Array.freeze<Nat8>(currentValue), equal))) {
+              if (Array.equal(Array.freeze<Nat8>(currentValue), Array.freeze<Nat8>(originalValue), equal)) {
+                if ((not (Array.equal(Array.freeze<Nat8>(originalValue), [], equal))) and value == 0) {
+                  exVar.gasRefund += 4800;
+                };
+              } else {
+                if (not (Array.equal(Array.freeze<Nat8>(originalValue), [], equal))) {
+                  if (Array.equal(Array.freeze<Nat8>(currentValue), [], equal)) {
+                    exVar.gasRefund -= 4800; // in this instance there would have been at least 4800 added to gas refunds earlier in the context
+                  } else {
+                    if (Array.equal(valueArray, [], equal)) {
+                      exVar.gasRefund += 4800;
+                    };
+                  };
+                };
+                if (Array.equal(valueArray, Array.freeze<Nat8>(originalValue), equal)) {
+                  if (Array.equal(Array.freeze<Nat8>(originalValue), [], equal)) {
+                    exVar.gasRefund += 19900;
+                  } else {
+                    exVar.gasRefund += 2800;
+                  };
+                };
+              };
+            };
+            // apply gas cost
+            let newGas: Int = exVar.totalGas - dynamicGas; // warm/cold slot distinction not in this version
             if (newGas < 0) {
               return #err("Out of gas")
               } else {
@@ -1967,19 +2030,99 @@ module {
     };
   };
   // TODO:
-  //   Apply dyamic gas and gas refunds.
-  //   Update exCon.contractStorage from exVar.storageChanges at end of context.
-  //   Consider updating exVar.contractStorage instead of using exVar.storageChanges.
+  //   Apply dyamic gas cost and gas refunds - done
+  //   Consider updating exVar.contractStorage at end of context instead of within this function.
+  //   Consider just updating exVar.contractStorage here instead of using exVar.storageChanges as well.
 
-  let op_56_JUMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_56_JUMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(counter)) {
+        if (exCon.code[counter] == 0x5b) {
+          exVar.programCounter := counter - 1;
+          } else {
+          return #err("Counter offset is not a JUMPDEST");
+        };        
+        let newGas: Int = exVar.totalGas - 8;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_57_JUMPI = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_57_JUMPI = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(counter)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(i)) {
+            if (i != 0) {
+              if (exCon.code[counter] == 0x5b) {
+                exVar.programCounter := counter - 1;
+                } else {
+                return #err("Counter offset is not a JUMPDEST");
+              };  
+            };
+          };
+        };      
+        let newGas: Int = exVar.totalGas - 10;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_58_PC = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_58_PC = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(Int.abs(exVar.programCounter))) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_59_MSIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_59_MSIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.push(Vec.size(exVar.memory))) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) {
+        let newGas: Int = exVar.totalGas - 2;
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
-  let op_5A_GAS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_5A_GAS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    let newGas: Int = exVar.totalGas - 2;
+    if (newGas < 0) {
+      return #err("Out of gas")
+    } else {
+      exVar.totalGas := Int.abs(newGas);
+      switch (exVar.stack.push(exVar.totalGas)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(_)) { return #ok(exVar) };
+      };
+    };
+  };
 
   let op_5B_JUMPDEST = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let newGas: Int = exVar.totalGas - 1;
@@ -2011,8 +2154,8 @@ module {
 
   let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     // check that there are enough operands
-    if (Array.size(exCon.code) < exVar.programCounter + 2) {return #err("Not enough operands")};
-    switch (exVar.stack.push(Nat8.toNat(exCon.code[exVar.programCounter + 1]))) {
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + 2) {return #err("Not enough operands")};
+    switch (exVar.stack.push(Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + 1]))) {
       case (#err(e)) { return #err(e) };
       case (#ok(())) {
         exVar.programCounter += 1;
@@ -2029,10 +2172,10 @@ module {
 
   let op_61_PUSH2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 2;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2051,10 +2194,10 @@ module {
 
   let op_62_PUSH3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 3;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2073,10 +2216,10 @@ module {
 
   let op_63_PUSH4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 4;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2095,10 +2238,10 @@ module {
 
   let op_64_PUSH5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 5;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2117,10 +2260,10 @@ module {
 
   let op_65_PUSH6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 6;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2139,10 +2282,10 @@ module {
 
   let op_66_PUSH7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 7;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2161,10 +2304,10 @@ module {
 
   let op_67_PUSH8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 8;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2183,10 +2326,10 @@ module {
 
   let op_68_PUSH9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 9;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2205,10 +2348,10 @@ module {
 
   let op_69_PUSH10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 10;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2227,10 +2370,10 @@ module {
 
   let op_6A_PUSH11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 11;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2249,10 +2392,10 @@ module {
 
   let op_6B_PUSH12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 12;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2271,10 +2414,10 @@ module {
 
   let op_6C_PUSH13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 13;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2293,10 +2436,10 @@ module {
 
   let op_6D_PUSH14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 14;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2315,10 +2458,10 @@ module {
 
   let op_6E_PUSH15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 15;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2337,10 +2480,10 @@ module {
 
   let op_6F_PUSH16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 16;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2359,10 +2502,10 @@ module {
 
   let op_70_PUSH17 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 17;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2381,10 +2524,10 @@ module {
 
   let op_71_PUSH18 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 18;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2403,10 +2546,10 @@ module {
 
   let op_72_PUSH19 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 19;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2425,10 +2568,10 @@ module {
 
   let op_73_PUSH20 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 20;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2447,10 +2590,10 @@ module {
 
   let op_74_PUSH21 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 21;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2469,10 +2612,10 @@ module {
 
   let op_75_PUSH22 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 22;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2491,10 +2634,10 @@ module {
 
   let op_76_PUSH23 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 23;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2513,10 +2656,10 @@ module {
 
   let op_77_PUSH24 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 24;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2535,10 +2678,10 @@ module {
 
   let op_78_PUSH25 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 25;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2557,10 +2700,10 @@ module {
 
   let op_79_PUSH26 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 26;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2579,10 +2722,10 @@ module {
 
   let op_7A_PUSH27 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 27;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2601,10 +2744,10 @@ module {
 
   let op_7B_PUSH28 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 28;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2623,10 +2766,10 @@ module {
 
   let op_7C_PUSH29 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 29;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2645,10 +2788,10 @@ module {
 
   let op_7D_PUSH30 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 30;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2667,10 +2810,10 @@ module {
 
   let op_7E_PUSH31 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 31;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
@@ -2689,10 +2832,10 @@ module {
 
   let op_7F_PUSH32 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     let bytes = 32;
-    if (Array.size(exCon.code) < exVar.programCounter + bytes + 1) {return #err("Not enough operands")};
+    if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
     for (i in Iter.range(1, bytes)) {
-      value += Nat8.toNat(exCon.code[exVar.programCounter + i]) * (256 ** (bytes - i));
+      value += Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + i]) * (256 ** (bytes - i));
     };
     switch (exVar.stack.push(value)) {
       case (#err(e)) { return #err(e) };
