@@ -18,14 +18,14 @@ let dummyTransaction: T.Transaction = {
     caller = "\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa";
     nonce = 2;
     gasPriceTx = 5;
-    gasLimitTx = 2000;
+    gasLimitTx = 100_000;
     callee = "\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb";
     incomingEth = 123;
     dataTx = "\01\23\45\67\89\ab\cd\ef";
 };
 
 let dummyCallerState: T.CallerState = {
-    balance = 50000;
+    balance = 550_000;
     nonce = 1;
     code = [];
     storage = Trie.empty();
@@ -871,7 +871,7 @@ await test("SELFBALANCE", func() : async () {
     );
     let result = context.stack;
     Debug.print(debug_show(result));
-    assert(result == [50000 - 2000 * 5 - 123]);
+    assert(result == [550000 - 100000 * 5 - 123]);
 });
 
 // 48 BASEFEE
@@ -883,4 +883,201 @@ await test("BASEFEE", func() : async () {
     let result = context.stack;
     Debug.print(debug_show(result));
     assert(result == [0]);
+});
+
+Debug.print(">");
+Debug.print(">");
+Debug.print(">  Memory Operations");
+Debug.print(">");
+Debug.print(">");
+
+// 50 POP
+await test("POP", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x62,                // PUSH3
+        0x78, 0x90, 0xab,    // 0x7890ab
+        0x50]                // POP
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0x123456]);
+});
+
+// 51 MLOAD
+await test("MLOAD: 0", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x60, 0,             // PUSH1 0
+        0x52,                // MSTORE
+        0x60, 0,             // PUSH1 0
+        0x51]                // MLOAD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0x123456]);
+});
+
+// 52 MSTORE
+await test("MSTORE: 0, 0x123456", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x60, 0,             // PUSH1 0
+        0x52]                // MSTORE
+    );
+    let result = context.memory;
+    Debug.print(debug_show(result));
+    assert(result == [0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0x12, 0x34, 0x56]);
+});
+
+// 53 MSTORE8
+await test("MSTORE8: 5, 0xff", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 0xff,  // PUSH1 0xff
+        0x60, 5,      // PUSH1 5
+        0x53]         // MSTORE8
+    );
+    let result = context.memory;
+    Debug.print(debug_show(result));
+    assert(result == [0, 0, 0, 0, 0, 0xff, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0]);
+});
+
+// 54 SLOAD &
+// 55 SSTORE
+await test("SSTORE: (42, 0x123456); SLOAD", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x60, 42,            // PUSH1 42
+        0x55,                // SSTORE
+        0x60, 42,            // PUSH1 42
+        0x54]                // SLOAD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0x123456]);
+});
+
+// 56 JUMP
+await test("JUMP: 10", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 10,              // PUSH1 10
+        0x56,                   // JUMP
+        0x50, 0x50, 0x50, 0x50, // POP (x7 as dummy code)
+        0x50, 0x50, 0x50,
+        0x5b,                   // JUMPDEST
+        0x60, 2,                // PUSH1 2
+        0x60, 1,                // PUSH1 1
+        0x01]                   // ADD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [3]);
+});
+
+// 57 JUMPI
+await test("JUMPI: 12, 1", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 1,               // PUSH1 1
+        0x60, 12,               // PUSH1 11
+        0x57,                   // JUMPI
+        0x50, 0x50, 0x50, 0x50, // POP (x7 as dummy code)
+        0x50, 0x50, 0x50,
+        0x5b,                   // JUMPDEST
+        0x60, 2,                // PUSH1 2
+        0x60, 1,                // PUSH1 1
+        0x01]                   // ADD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [3]);
+});
+
+// 58 PC
+await test("PC", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 2,               // PUSH1 2
+        0x60, 1,                // PUSH1 1
+        0x01,                   // ADD
+        0x58]                   // PC
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [3, 5]);
+});
+
+// 59 MSIZE
+await test("MSIZE", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x60, 2,             // PUSH1 2
+        0x52,                // MSTORE
+        0x59]                // MSIZE
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [64]);
+});
+
+// 5A GAS
+await test("GAS", func() : async () {
+    let context = await testOpCodes(
+        [0x5f,   // PUSH0
+        0x5a]    // GAS
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0, 100000 - 2 - 2]);
+});
+
+// 5B JUMPDEST
+// Tested in 56 & 57 above
+await test("JUMPDEST", func() : async () {
+    let context = await testOpCodes(
+        [0x5b,    // JUMPDEST
+        0x5f]     // PUSH0
+    );
+    Debug.print("JUMPDEST was tested with JUMP and JUMPI above.");
+    Debug.print("This simply tests that the opcode by itself runs without error.");
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0]);
+});
+
+// Dynamic gas cost & gas refund mechanism
+await test("Dynamic gas cost & gas refund", func() : async () {
+    let context = await testOpCodes(
+        [0x62,               // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x60, 42,            // PUSH1 42
+        0x55,                // SSTORE
+        0x62,                // PUSH3
+        0x12, 0x34, 0x56,    // 0x123456
+        0x60, 42,            // PUSH1 42
+        0x55,                // SSTORE
+        0x60, 0,             // PUSH1 0
+        0x60, 42,            // PUSH1 42
+        0x55]                // SSTORE
+    );
+    let expectedGasCost = 3 + 3 + 20000 + 3 + 3 + 100 + 3 + 3 + 100;
+    var expectedGasRefund = 0 + 0 + 19900;
+    if (expectedGasRefund > expectedGasCost / 5) {
+      expectedGasRefund := expectedGasCost / 5;
+    };
+    let gasSpent = context.currentGas - context.totalGas;
+    Debug.print(debug_show("Expected gas cost", expectedGasCost));
+    Debug.print(debug_show(("Expected gas refund", expectedGasRefund)));
+    Debug.print(debug_show(("Gas spent", gasSpent)));
+    Debug.print(debug_show(("Gas refund", context.gasRefund)));
+    assert((expectedGasCost == gasSpent) and (expectedGasRefund == context.gasRefund));
 });

@@ -1782,7 +1782,10 @@ module {
           Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
           new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
         };
-        let result = Nat8.toNat(Vec.get(exVar.memory, offset));
+        var result: Nat = 0;
+        for (pos in Iter.revRange(31, 0)) {
+          result += Nat8.toNat(Vec.get(exVar.memory, offset + 31 - Int.abs(pos))) * (256 ** Int.abs(pos));
+        };
         switch (exVar.stack.push(result)) {
           case (#err(e)) { return #err(e) };
           case (#ok(_)) {
@@ -1819,7 +1822,8 @@ module {
             if (offset + 32 > memory_byte_size) {
               let new_memory_size_word = (offset + 32 + 31) / 32;
               let new_memory_byte_size = new_memory_size_word * 32;
-              Vec.addMany(exVar.memory, 32, Nat8.fromNat(0));
+              let mem_incr = new_memory_byte_size - memory_byte_size;
+              Vec.addMany(exVar.memory, mem_incr, Nat8.fromNat(0));
               new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
             };
             for (i in Iter.range(0, 31)) {
@@ -1946,28 +1950,20 @@ module {
             let valueArray = Buffer.toArray<Nat8>(valueBuffer);
             var originalValueOpt = Trie.get(exCon.contractStorage, key key_, Blob.equal); // type ?[Nat8]
             var currentValueOpt = Trie.get(exVar.contractStorage, key key_, Blob.equal);
-            var originalValue = Array.init<Nat8>(0, 0);
-            var currentValue = Array.init<Nat8>(0, 0);
+            var originalValue = Array.init<Nat8>(32, 0);
+            var currentValue = Array.init<Nat8>(32, 0);
+            let zeroArray = Array.freeze<Nat8>(Array.init<Nat8>(32, 0));
             var storageChangeKey = getCodeHash(Blob.toArray(key_));
             switch (originalValueOpt) {
               case (null) {};
               case (?origVal) {
                 originalValue := Array.thaw<Nat8>(origVal);
-                currentValue := Array.thaw<Nat8>(origVal);
-                // Check for any changes during the current execution
-                storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), origVal));
-                for (change in Map.entries(exVar.storageChanges)) {
-                  if (change.0 == storageChangeKey) {
-                    switch (change.1.newValue) {
-                      case (null) {}; // This assumes you can't change a storage value to null
-                      case (?newCurVal) {
-                        currentValue := Array.thaw<Nat8>(newCurVal);
-                        currentValueOpt := Option.make(newCurVal);
-                        storageChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(key_), newCurVal));
-                      };
-                    };
-                  };
-                };
+              };
+            };
+            switch (currentValueOpt) {
+              case (null) {};
+              case (?curVal) {
+                currentValue := Array.thaw<Nat8>(curVal);
               };
             };
             let storageSlotChange = {
@@ -1977,13 +1973,13 @@ module {
             };
             Map.set(exVar.storageChanges, bhash, storageChangeKey, storageSlotChange);
             exVar.contractStorage := Trie.put(exVar.contractStorage, key(key_), Blob.equal, valueArray).0;
-            // implement dynamic gas cost
+            // calculate dynamic gas cost
             var dynamicGas = 100;
             if (Array.equal(valueArray, Array.freeze<Nat8>(currentValue), equal)) {
               dynamicGas := 100;
             } else {
               if (Array.equal(Array.freeze<Nat8>(currentValue), Array.freeze<Nat8>(originalValue), equal)) {
-                if (Array.equal(Array.freeze<Nat8>(originalValue), [], equal)) {
+                if (Array.equal(Array.freeze<Nat8>(originalValue), zeroArray, equal)) {
                   dynamicGas := 20000;
                 } else {
                   dynamicGas := 2900;
@@ -1993,21 +1989,21 @@ module {
             // calculate gas refunds
             if (not (Array.equal(valueArray, Array.freeze<Nat8>(currentValue), equal))) {
               if (Array.equal(Array.freeze<Nat8>(currentValue), Array.freeze<Nat8>(originalValue), equal)) {
-                if ((not (Array.equal(Array.freeze<Nat8>(originalValue), [], equal))) and value == 0) {
+                if ((not (Array.equal(Array.freeze<Nat8>(originalValue), zeroArray, equal))) and value == 0) {
                   exVar.gasRefund += 4800;
                 };
               } else {
-                if (not (Array.equal(Array.freeze<Nat8>(originalValue), [], equal))) {
-                  if (Array.equal(Array.freeze<Nat8>(currentValue), [], equal)) {
-                    exVar.gasRefund -= 4800; // in this instance there would have been at least 4800 added to gas refunds earlier in the context
+                if (not (Array.equal(Array.freeze<Nat8>(originalValue), zeroArray, equal))) {
+                  if (Array.equal(Array.freeze<Nat8>(currentValue), zeroArray, equal)) {
+                    exVar.gasRefund -= 4800; // In this instance there would have been at least 4800 added to gas refunds earlier in the context.
                   } else {
-                    if (Array.equal(valueArray, [], equal)) {
+                    if (Array.equal(valueArray, zeroArray, equal)) {
                       exVar.gasRefund += 4800;
                     };
                   };
                 };
                 if (Array.equal(valueArray, Array.freeze<Nat8>(originalValue), equal)) {
-                  if (Array.equal(Array.freeze<Nat8>(originalValue), [], equal)) {
+                  if (Array.equal(Array.freeze<Nat8>(originalValue), zeroArray, equal)) {
                     exVar.gasRefund += 19900;
                   } else {
                     exVar.gasRefund += 2800;
