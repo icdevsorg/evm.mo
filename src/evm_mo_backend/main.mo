@@ -1753,7 +1753,6 @@ module {
 
 
   // Memory Operations
-  // (Consider comparing Map and Trie types)
 
   let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
@@ -2030,7 +2029,6 @@ module {
     };
   };
   // TODO:
-  //   Apply dyamic gas cost and gas refunds - done
   //   Consider updating exVar.contractStorage at end of context instead of within this function.
   //   Consider just updating exVar.contractStorage here instead of using exVar.storageChanges as well.
 
@@ -2931,6 +2929,7 @@ module {
 
 
   // Execution and System Operations
+  // TODO - Test RETURNDATASIZE & RETURNDATACOPY
   
   let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
