@@ -2846,82 +2846,1143 @@ module {
     };
   };
 
-  let op_80_DUP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_80_DUP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_81_DUP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_81_DUP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(1)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_82_DUP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_82_DUP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(2)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_83_DUP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_83_DUP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(3)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_84_DUP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_84_DUP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(4)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_85_DUP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_85_DUP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(5)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_86_DUP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_86_DUP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(6)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_87_DUP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_87_DUP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(7)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_88_DUP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_88_DUP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(8)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_89_DUP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_89_DUP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(9)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_8A_DUP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_8A_DUP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(10)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_8B_DUP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_8B_DUP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(11)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_8C_DUP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_8C_DUP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(12)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_8D_DUP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_8D_DUP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(13)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_8E_DUP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_8E_DUP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(14)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_8F_DUP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_8F_DUP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(15)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.push(value)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok()) {
+            let newGas: Int = exVar.totalGas - 3;
+            if (newGas < 0) {
+              return #err("Out of gas")
+            } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_90_SWAP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_90_SWAP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(1)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(1, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_91_SWAP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_91_SWAP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(2)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(2, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_92_SWAP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_92_SWAP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(3)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(3, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_93_SWAP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_93_SWAP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(4)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(4, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_94_SWAP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_94_SWAP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(5)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(5, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_95_SWAP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_95_SWAP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(6)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(6, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_96_SWAP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_96_SWAP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(7)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(7, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_97_SWAP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_97_SWAP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(8)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(8, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_98_SWAP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_98_SWAP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(9)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(9, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_99_SWAP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_99_SWAP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(10)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(10, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_9A_SWAP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_9A_SWAP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(11)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(11, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_9B_SWAP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_9B_SWAP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(12)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(12, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_9C_SWAP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_9C_SWAP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(13)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(13, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_9D_SWAP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_9D_SWAP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(14)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(14, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_9E_SWAP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_9E_SWAP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(15)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(15, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_9F_SWAP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_9F_SWAP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.peek(0)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(a)) {
+        switch (exVar.stack.peek(16)) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(b)) {
+            switch (exVar.stack.poke(0, b)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok()) {
+                switch (exVar.stack.poke(16, a)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok()) {
+                    let newGas: Int = exVar.totalGas - 3;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                    } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
 
   // Logging Operations
 
-  let op_A0_LOG0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A0_LOG0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            let dataBuffer = Buffer.Buffer<Nat8>(4);
+            if (size > 0) {
+              for (pos in Iter.range(offset, offset + size - 1)) {
+                dataBuffer.add(Vec.get(exVar.memory, pos));
+              };
+            };
+            let dataArray = Buffer.toArray<Nat8>(dataBuffer);
+            let data = Blob.fromArray(dataArray);
+            let topics : [Blob] = [];
+            let logEntry : T.LogEntry = { topics = topics; data = data; };
+            Vec.add(exVar.logs, logEntry);
+            let memory_expansion_cost = new_memory_cost - memory_cost;
+            var topic_count = 0;
+            for (entry in Vec.vals(exVar.logs)) {
+              topic_count += entry.topics.size();
+            };
+            let dynamic_gas = 375 * topic_count + 8 * size + memory_expansion_cost;
+            let newGas: Int = exVar.totalGas - 375 - dynamic_gas;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_A1_LOG1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A1_LOG1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            let dataBuffer = Buffer.Buffer<Nat8>(4);
+            if (size > 0) {
+              for (pos in Iter.range(offset, offset + size - 1)) {
+                dataBuffer.add(Vec.get(exVar.memory, pos));
+              };
+            };
+            let dataArray = Buffer.toArray<Nat8>(dataBuffer);
+            let data = Blob.fromArray(dataArray);
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(topic1Nat)) {
+                let topic1Buffer = Buffer.Buffer<Nat8>(32);
+                for (i in Iter.revRange(31, 0)) {
+                  topic1Buffer.add(Nat8.fromNat((topic1Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                };
+                let topic1 = Blob.fromArray(Buffer.toArray<Nat8>(topic1Buffer));
+                let topics : [Blob] = [topic1];
+                let logEntry : T.LogEntry = { topics = topics; data = data; };
+                Vec.add(exVar.logs, logEntry);
+                let memory_expansion_cost = new_memory_cost - memory_cost;
+                var topic_count = 0;
+                for (entry in Vec.vals(exVar.logs)) {
+                  topic_count += entry.topics.size();
+                };
+                let dynamic_gas = 375 * topic_count + 8 * size + memory_expansion_cost;
+                let newGas: Int = exVar.totalGas - 375 - dynamic_gas;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar);
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_A2_LOG2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A2_LOG2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            let dataBuffer = Buffer.Buffer<Nat8>(4);
+            if (size > 0) {
+              for (pos in Iter.range(offset, offset + size - 1)) {
+                dataBuffer.add(Vec.get(exVar.memory, pos));
+              };
+            };
+            let dataArray = Buffer.toArray<Nat8>(dataBuffer);
+            let data = Blob.fromArray(dataArray);
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(topic1Nat)) {
+                let topic1Buffer = Buffer.Buffer<Nat8>(32);
+                for (i in Iter.revRange(31, 0)) {
+                  topic1Buffer.add(Nat8.fromNat((topic1Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                };
+                let topic1 = Blob.fromArray(Buffer.toArray<Nat8>(topic1Buffer));
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(topic2Nat)) {
+                    let topic2Buffer = Buffer.Buffer<Nat8>(32);
+                    for (i in Iter.revRange(31, 0)) {
+                      topic2Buffer.add(Nat8.fromNat((topic2Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                    };
+                    let topic2 = Blob.fromArray(Buffer.toArray<Nat8>(topic2Buffer));
+                    let topics : [Blob] = [topic1, topic2];
+                    let logEntry : T.LogEntry = { topics = topics; data = data; };
+                    Vec.add(exVar.logs, logEntry);
+                    let memory_expansion_cost = new_memory_cost - memory_cost;
+                    var topic_count = 0;
+                    for (entry in Vec.vals(exVar.logs)) {
+                      topic_count += entry.topics.size();
+                    };
+                    let dynamic_gas = 375 * topic_count + 8 * size + memory_expansion_cost;
+                    let newGas: Int = exVar.totalGas - 375 - dynamic_gas;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                      } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_A3_LOG3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A3_LOG3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            let dataBuffer = Buffer.Buffer<Nat8>(4);
+            if (size > 0) {
+              for (pos in Iter.range(offset, offset + size - 1)) {
+                dataBuffer.add(Vec.get(exVar.memory, pos));
+              };
+            };
+            let dataArray = Buffer.toArray<Nat8>(dataBuffer);
+            let data = Blob.fromArray(dataArray);
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(topic1Nat)) {
+                let topic1Buffer = Buffer.Buffer<Nat8>(32);
+                for (i in Iter.revRange(31, 0)) {
+                  topic1Buffer.add(Nat8.fromNat((topic1Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                };
+                let topic1 = Blob.fromArray(Buffer.toArray<Nat8>(topic1Buffer));
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(topic2Nat)) {
+                    let topic2Buffer = Buffer.Buffer<Nat8>(32);
+                    for (i in Iter.revRange(31, 0)) {
+                      topic2Buffer.add(Nat8.fromNat((topic2Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                    };
+                    let topic2 = Blob.fromArray(Buffer.toArray<Nat8>(topic2Buffer));
+                    switch (exVar.stack.pop()) {
+                      case (#err(e)) { return #err(e) };
+                      case (#ok(topic3Nat)) {
+                        let topic3Buffer = Buffer.Buffer<Nat8>(32);
+                        for (i in Iter.revRange(31, 0)) {
+                          topic3Buffer.add(Nat8.fromNat((topic3Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                        };
+                        let topic3 = Blob.fromArray(Buffer.toArray<Nat8>(topic3Buffer));
+                        let topics : [Blob] = [topic1, topic2, topic3];
+                        let logEntry : T.LogEntry = { topics = topics; data = data; };
+                        Vec.add(exVar.logs, logEntry);
+                        let memory_expansion_cost = new_memory_cost - memory_cost;
+                        var topic_count = 0;
+                        for (entry in Vec.vals(exVar.logs)) {
+                          topic_count += entry.topics.size();
+                        };
+                        let dynamic_gas = 375 * topic_count + 8 * size + memory_expansion_cost;
+                        let newGas: Int = exVar.totalGas - 375 - dynamic_gas;
+                        if (newGas < 0) {
+                          return #err("Out of gas")
+                          } else {
+                          exVar.totalGas := Int.abs(newGas);
+                          return #ok(exVar);
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_A4_LOG4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A4_LOG4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            let dataBuffer = Buffer.Buffer<Nat8>(4);
+            if (size > 0) {
+              for (pos in Iter.range(offset, offset + size - 1)) {
+                dataBuffer.add(Vec.get(exVar.memory, pos));
+              };
+            };
+            let dataArray = Buffer.toArray<Nat8>(dataBuffer);
+            let data = Blob.fromArray(dataArray);
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(topic1Nat)) {
+                let topic1Buffer = Buffer.Buffer<Nat8>(32);
+                for (i in Iter.revRange(31, 0)) {
+                  topic1Buffer.add(Nat8.fromNat((topic1Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                };
+                let topic1 = Blob.fromArray(Buffer.toArray<Nat8>(topic1Buffer));
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(topic2Nat)) {
+                    let topic2Buffer = Buffer.Buffer<Nat8>(32);
+                    for (i in Iter.revRange(31, 0)) {
+                      topic2Buffer.add(Nat8.fromNat((topic2Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                    };
+                    let topic2 = Blob.fromArray(Buffer.toArray<Nat8>(topic2Buffer));
+                    switch (exVar.stack.pop()) {
+                      case (#err(e)) { return #err(e) };
+                      case (#ok(topic3Nat)) {
+                        let topic3Buffer = Buffer.Buffer<Nat8>(32);
+                        for (i in Iter.revRange(31, 0)) {
+                          topic3Buffer.add(Nat8.fromNat((topic3Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                        };
+                        let topic3 = Blob.fromArray(Buffer.toArray<Nat8>(topic3Buffer));
+                        switch (exVar.stack.pop()) {
+                          case (#err(e)) { return #err(e) };
+                          case (#ok(topic4Nat)) {
+                            let topic4Buffer = Buffer.Buffer<Nat8>(32);
+                            for (i in Iter.revRange(31, 0)) {
+                              topic4Buffer.add(Nat8.fromNat((topic4Nat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                            };
+                            let topic4 = Blob.fromArray(Buffer.toArray<Nat8>(topic4Buffer));
+                            let topics : [Blob] = [topic1, topic2, topic3, topic4];
+                            let logEntry : T.LogEntry = { topics = topics; data = data; };
+                            Vec.add(exVar.logs, logEntry);
+                            let memory_expansion_cost = new_memory_cost - memory_cost;
+                            var topic_count = 0;
+                            for (entry in Vec.vals(exVar.logs)) {
+                              topic_count += entry.topics.size();
+                            };
+                            let dynamic_gas = 375 * topic_count + 8 * size + memory_expansion_cost;
+                            let newGas: Int = exVar.totalGas - 375 - dynamic_gas;
+                            if (newGas < 0) {
+                              return #err("Out of gas")
+                              } else {
+                              exVar.totalGas := Int.abs(newGas);
+                              return #ok(exVar);
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
 
   // Execution and System Operations
