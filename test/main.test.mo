@@ -1081,3 +1081,217 @@ await test("Dynamic gas cost & gas refund", func() : async () {
     Debug.print(debug_show(("Gas refund", context.gasRefund)));
     assert((expectedGasCost == gasSpent) and (expectedGasRefund == context.gasRefund));
 });
+
+// Push Operations, Duplication Operations, Exchange Operations
+
+Debug.print(">");
+Debug.print(">");
+Debug.print(">  Push, Duplication and Exchange Operations");
+Debug.print(">");
+Debug.print(">");
+
+// 5F PUSH0
+await test("PUSH0", func() : async () {
+    let context = await testOpCodes(
+        [0x5f]  // PUSH0
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0]);
+});
+
+// 5F-7F PUSH various
+await test("PUSH0, PUSH1, PUSH2, PUSH6, PUSH12, PUSH32", func() : async () {
+    let context = await testOpCodes(
+        [0x5f,                  // PUSH0
+        0x60, 1,                // PUSH1 1
+        0x61, 2, 0,             // PUSH2 0x0200
+        0x65, 3, 0, 0, 0, 0, 0, // PUSH6 0x030000000000
+        0x6b,                   // PUSH12
+        4, 0, 0, 0, 0, 0,       // 0x040000000000000000000000
+        0, 0, 0, 0, 0, 0,
+        0x7f,                   // PUSH32
+        5, 0, 0, 0, 0, 0, 0, 0, // 0x0500000000000000000000000000000000000000000000000000000000000000
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0]
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0, 1, 0x0200, 0x030000000000, 0x040000000000000000000000,
+    0x0500000000000000000000000000000000000000000000000000000000000000]);
+});
+
+// 80 DUP1
+await test("DUP1", func() : async () {
+    let context = await testOpCodes(
+        [0x5f,                  // PUSH0
+        0x60, 1,                // PUSH1 1
+        0x61, 2, 0,             // PUSH2 0x0200
+        0x65, 3, 0, 0, 0, 0, 0, // PUSH6 0x030000000000
+        0x6b,                   // PUSH12
+        4, 0, 0, 0, 0, 0,       // 0x040000000000000000000000
+        0, 0, 0, 0, 0, 0,
+        0x7f,                   // PUSH32
+        5, 0, 0, 0, 0, 0, 0, 0, // 0x0500000000000000000000000000000000000000000000000000000000000000
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0x80]                     // DUP1
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0, 1, 0x0200, 0x030000000000, 0x040000000000000000000000,
+    0x0500000000000000000000000000000000000000000000000000000000000000,
+    0x0500000000000000000000000000000000000000000000000000000000000000]);
+});
+
+// 83 DUP4
+await test("DUP4", func() : async () {
+    let context = await testOpCodes(
+        [0x5f,                  // PUSH0
+        0x60, 1,                // PUSH1 1
+        0x61, 2, 0,             // PUSH2 0x0200
+        0x65, 3, 0, 0, 0, 0, 0, // PUSH6 0x030000000000
+        0x6b,                   // PUSH12
+        4, 0, 0, 0, 0, 0,       // 0x040000000000000000000000
+        0, 0, 0, 0, 0, 0,
+        0x7f,                   // PUSH32
+        5, 0, 0, 0, 0, 0, 0, 0, // 0x0500000000000000000000000000000000000000000000000000000000000000
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0x83]                     // DUP4
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [0, 1, 0x0200, 0x030000000000, 0x040000000000000000000000,
+    0x0500000000000000000000000000000000000000000000000000000000000000, 0x0200]);
+});
+
+// 87 DUP8
+await test("DUP8 (should throw error)", func() : async () {
+    let context = await testOpCodes(
+        [0x5f,                  // PUSH0
+        0x60, 1,                // PUSH1 1
+        0x61, 2, 0,             // PUSH2 0x0200
+        0x65, 3, 0, 0, 0, 0, 0, // PUSH6 0x030000000000
+        0x6b,                   // PUSH12
+        4, 0, 0, 0, 0, 0,       // 0x040000000000000000000000
+        0, 0, 0, 0, 0, 0,
+        0x7f,                   // PUSH32
+        5, 0, 0, 0, 0, 0, 0, 0, // 0x0500000000000000000000000000000000000000000000000000000000000000
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0x87]                     // DUP7
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == []);
+});
+
+// 8F DUP16
+await test("DUP1", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 16, // PUSH1 16
+        0x60, 15,  // PUSH1 15
+        0x60, 14,  // PUSH1 14
+        0x60, 13,  // PUSH1 13
+        0x60, 12,  // PUSH1 12
+        0x60, 11,  // PUSH1 11
+        0x60, 10,  // PUSH1 10
+        0x60, 9,   // PUSH1 9
+        0x60, 8,   // PUSH1 8
+        0x60, 7,   // PUSH1 7
+        0x60, 6,   // PUSH1 6
+        0x60, 5,   // PUSH1 5
+        0x60, 4,   // PUSH1 4
+        0x60, 3,   // PUSH1 3
+        0x60, 2,   // PUSH1 2
+        0x60, 1,   // PUSH1 1
+        0x8f]      // DUP16
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 16]);
+});
+
+// 90 SWAP1
+await test("SWAP1", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 16, // PUSH1 16
+        0x60, 15,  // PUSH1 15
+        0x60, 14,  // PUSH1 14
+        0x60, 13,  // PUSH1 13
+        0x60, 12,  // PUSH1 12
+        0x60, 11,  // PUSH1 11
+        0x60, 10,  // PUSH1 10
+        0x60, 9,   // PUSH1 9
+        0x60, 8,   // PUSH1 8
+        0x60, 7,   // PUSH1 7
+        0x60, 6,   // PUSH1 6
+        0x60, 5,   // PUSH1 5
+        0x60, 4,   // PUSH1 4
+        0x60, 3,   // PUSH1 3
+        0x60, 2,   // PUSH1 2
+        0x60, 1,   // PUSH1 1
+        0x90]      // SWAP1
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 1, 2]);
+});
+
+// 9A SWAP11
+await test("SWAP11", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 16, // PUSH1 16
+        0x60, 15,  // PUSH1 15
+        0x60, 14,  // PUSH1 14
+        0x60, 13,  // PUSH1 13
+        0x60, 12,  // PUSH1 12
+        0x60, 11,  // PUSH1 11
+        0x60, 10,  // PUSH1 10
+        0x60, 9,   // PUSH1 9
+        0x60, 8,   // PUSH1 8
+        0x60, 7,   // PUSH1 7
+        0x60, 6,   // PUSH1 6
+        0x60, 5,   // PUSH1 5
+        0x60, 4,   // PUSH1 4
+        0x60, 3,   // PUSH1 3
+        0x60, 2,   // PUSH1 2
+        0x60, 1,   // PUSH1 1
+        0x9a]      // SWAP11
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [16, 15, 14, 13, 1, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 12]);
+});
+
+// 9F SWAP16
+await test("SWAP16 (should throw error)", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 16, // PUSH1 16
+        0x60, 15,  // PUSH1 15
+        0x60, 14,  // PUSH1 14
+        0x60, 13,  // PUSH1 13
+        0x60, 12,  // PUSH1 12
+        0x60, 11,  // PUSH1 11
+        0x60, 10,  // PUSH1 10
+        0x60, 9,   // PUSH1 9
+        0x60, 8,   // PUSH1 8
+        0x60, 7,   // PUSH1 7
+        0x60, 6,   // PUSH1 6
+        0x60, 5,   // PUSH1 5
+        0x60, 4,   // PUSH1 4
+        0x60, 3,   // PUSH1 3
+        0x60, 2,   // PUSH1 2
+        0x60, 1,   // PUSH1 1
+        0x9f]      // SWAP16
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == []);
+});
+
