@@ -1295,3 +1295,154 @@ await test("SWAP16 (should throw error)", func() : async () {
     assert(result == []);
 });
 
+// A0 LOG0
+await test("LOG0", func() : async () {
+    let context = await testOpCodes(
+        [0x7f,                          // PUSH32
+        1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+        9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32,
+        0x60, 0,                        // PUSH1 0
+        0x52,                           // MSTORE
+        0x60, 6,                        // PUSH1 6
+        0x60, 4,                        // PUSH1 4
+        0xa0]                           // LOG0
+    );
+    let result = context.logs;
+    Debug.print(debug_show(result));
+    assert(result == { topics = [] : [Blob]; data = "\04\05\06\07\08\09" : Blob });
+});
+
+// A1 LOG1
+await test("LOG1", func() : async () {
+    let context = await testOpCodes(
+        [0x7f,                          // PUSH32
+        1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+        9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32,
+        0x60, 0,                        // PUSH1 0
+        0x52,                           // MSTORE
+        0x67,                           // PUSH8
+        0x12, 0x34, 0x56, 0x78,         // 0x1234567890abcdef
+        0x90, 0xab, 0xcd, 0xef,
+        0x60, 6,                        // PUSH1 6
+        0x60, 4,                        // PUSH1 4
+        0xa1]                           // LOG1
+    );
+    let result = context.logs;
+    Debug.print(debug_show(result));
+    assert(result == { topics = ["\12\34\56\78\90\ab\cd\ef"] : [Blob]; data = "\04\05\06\07\08\09" : Blob });
+});
+
+// A2 LOG2
+await test("LOG1", func() : async () {
+    let context = await testOpCodes(
+        [0x7f,                          // PUSH32
+        1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+        9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32,
+        0x60, 0,                        // PUSH1 0
+        0x52,                           // MSTORE
+        0x67,                           // PUSH8
+        0x13, 0x57, 0x9a, 0xce,         // 0x13579ace24680bdf
+        0x24, 0x68, 0x0b, 0xdf,
+        0x67,                           // PUSH8
+        0x12, 0x34, 0x56, 0x78,         // 0x1234567890abcdef
+        0x90, 0xab, 0xcd, 0xef,
+        0x60, 6,                        // PUSH1 6
+        0x60, 4,                        // PUSH1 4
+        0xa2]                           // LOG2
+    );
+    let result = context.logs;
+    Debug.print(debug_show(result));
+    assert(result == {
+        topics = [
+            "\12\34\56\78\90\ab\cd\ef",
+            "\13\57\9a\ce\24\68\0b\df"
+        ] : [Blob];
+        data = "\04\05\06\07\08\09" : Blob
+    });
+});
+
+// A3 LOG3
+await test("LOG3", func() : async () {
+    let context = await testOpCodes(
+        [0x7f,                          // PUSH32
+        1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+        9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32,
+        0x60, 0,                        // PUSH1 0
+        0x52,                           // MSTORE
+        0x67,                           // PUSH8
+        0xfe, 0xdc, 0xba, 0x09,         // 0xfedcba0987654321
+        0x87, 0x65, 0x43, 0x21,
+        0x67,                           // PUSH8
+        0x13, 0x57, 0x9a, 0xce,         // 0x13579ace24680bdf
+        0x24, 0x68, 0x0b, 0xdf,
+        0x67,                           // PUSH8
+        0x12, 0x34, 0x56, 0x78,         // 0x1234567890abcdef
+        0x90, 0xab, 0xcd, 0xef,
+        0x60, 6,                        // PUSH1 6
+        0x60, 4,                        // PUSH1 4
+        0xa3]                           // LOG3
+    );
+    let result = context.logs;
+    Debug.print(debug_show(result));
+    assert(result == {
+        topics = [
+            "\12\34\56\78\90\ab\cd\ef",
+            "\13\57\9a\ce\24\68\0b\df",
+            "\fe\dc\ba\09\87\65\43\21"
+        ] : [Blob];
+        data = "\04\05\06\07\08\09" : Blob
+    });
+});
+
+// A4 LOG4
+await test("LOG4", func() : async () {
+    let context = await testOpCodes(
+        [0x7f,                          // PUSH32
+        1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+        9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32,
+        0x60, 0,                        // PUSH1 0
+        0x52,                           // MSTORE
+        0x7f,                           // PUSH32
+        0x01, 0x23, 0x45, 0x67,         // 0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        0x89, 0xab, 0xcd, 0xef,
+        0x01, 0x23, 0x45, 0x67,
+        0x89, 0xab, 0xcd, 0xef,
+        0x01, 0x23, 0x45, 0x67,
+        0x89, 0xab, 0xcd, 0xef,
+        0x01, 0x23, 0x45, 0x67,
+        0x89, 0xab, 0xcd, 0xef,
+        0x67,                           // PUSH8
+        0xfe, 0xdc, 0xba, 0x09,         // 0xfedcba0987654321
+        0x87, 0x65, 0x43, 0x21,
+        0x67,                           // PUSH8
+        0x13, 0x57, 0x9a, 0xce,         // 0x13579ace24680bdf
+        0x24, 0x68, 0x0b, 0xdf,
+        0x67,                           // PUSH8
+        0x12, 0x34, 0x56, 0x78,         // 0x1234567890abcdef
+        0x90, 0xab, 0xcd, 0xef,
+        0x60, 16,                       // PUSH1 16
+        0x60, 4,                        // PUSH1 4
+        0xa4]                           // LOG4
+    );
+    let result = context.logs;
+    Debug.print(debug_show(result));
+    assert(result == {
+        topics = [
+            "\12\34\56\78\90\ab\cd\ef",
+            "\13\57\9a\ce\24\68\0b\df",
+            "\fe\dc\ba\09\87\65\43\21",
+            "\01\23\45\67\89\ab\cd\ef\01\23\45\67\89\ab\cd\ef\01\23\45\67\89\ab\cd\ef\01\23\45\67\89\ab\cd\ef"
+        ] : [Blob];
+        data = "\04\05\06\07\08\09\0a\0b\0c\0d\0e\0f\10\11\12\13" : Blob
+    });
+});
