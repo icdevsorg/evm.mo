@@ -3988,7 +3988,10 @@ module {
   // Execution and System Operations
   // TODO - Test RETURNDATASIZE & RETURNDATACOPY
   
-  let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    exVar.programCounter := Array.size(exCon.code);
+    return #ok(exVar);
+  };
 
   let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
@@ -3996,7 +3999,46 @@ module {
 
   let op_F2_CALLCODE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F3_RETURN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F3_RETURN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    exVar.programCounter := Array.size(exCon.code);
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            var result = "" : Blob;
+            if (size > 0) {
+              let resultBuffer = Buffer.Buffer<Nat8>(size);
+              for (pos in Iter.range(0, size - 1)) {
+                resultBuffer.add(Vec.get(exVar.memory, offset + pos));
+              };
+              result := Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
+            };
+            exVar.returnData := Option.make(result);
+            let memory_expansion_cost = new_memory_cost - memory_cost;
+            let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
@@ -4008,9 +4050,60 @@ module {
 
   let op_FC_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FD_REVERT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FD_REVERT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    exVar.programCounter := Array.size(exCon.code);
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            var result = "" : Blob;
+            if (size > 0) {
+              let resultBuffer = Buffer.Buffer<Nat8>(size);
+              for (pos in Iter.range(0, size - 1)) {
+                resultBuffer.add(Vec.get(exVar.memory, offset + pos));
+              };
+              result := Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
+            };
+            exVar.returnData := Option.make(result);
+            exVar.stack := EVMStack.EVMStack(); // for sub-context, value 0 is put on the stack of the calling context - TODO
+            exVar.memory := Vec.new<Nat8>();
+            exVar.contractStorage := exCon.contractStorage;
+            exVar.balanceChanges := Vec.fromArray<T.BalanceChange>(exCon.balanceChanges);
+            exVar.storageChanges := Map.new<Blob, T.StorageSlotChange>();
+            exVar.codeAdditions := Map.new<Blob, T.CodeChange>();
+            exVar.codeStore := Map.new<Blob, [T.OpCode]>();
+            exVar.storageStore := Map.new<Blob, Blob>();
+            exVar.logs := Vec.new<T.LogEntry>();
+            exVar.gasRefund := 0; // or value before current sub-context - TODO
+            let memory_expansion_cost = new_memory_cost - memory_cost;
+            let newGas: Int = exVar.totalGas - 3 - memory_expansion_cost;
+            if (newGas < 0) {
+              return #err("Out of gas")
+              } else {
+              exVar.totalGas := Int.abs(newGas);
+              return #ok(exVar);
+            };
+          };
+        };
+      };
+    };
+  };
 
-  let op_FE_INVALID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FE_INVALID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+    return #err("Designated INVALID opcode called");
+  };
 
   let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
 
