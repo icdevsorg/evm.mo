@@ -93,8 +93,8 @@ module {
     var storageChanges: Map<Blob, StorageSlotChange>;
     var codeAdditions: Map<Blob, CodeChange>;
     var codeStore: Map<Blob, [OpCode]>;
-    // storageStore is changed from Trie.Map<> to Map.Map<>
-    var storageStore: Map<Blob, Blob>;
+    // storageStore is changed from Trie.Map<> to Vec<>
+    var storageStore: Vec<(Blob, Blob)>;
     var logs: Logs;
     var totalGas: Nat;
     var gasRefund: Nat;
