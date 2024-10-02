@@ -1,4 +1,6 @@
+
 import Trie "mo:base/Trie";
+import Result "mo:base/Result";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import EVMStack "evmStack";
@@ -82,6 +84,7 @@ module {
       chainId: Nat;
     };
     calldata: Blob; // Input data for the contract execution
+    engineInstance: Engine; // The engine instance that is executing the contract
   };
 
   public type ExecutionVariables = {
@@ -133,4 +136,6 @@ module {
     blockCoinbase: Blob;
     chainId: Nat;
   };
+
+  public type Engine = [(ExecutionContext, ExecutionVariables) -> Result.Result<ExecutionVariables, Text>];
 };

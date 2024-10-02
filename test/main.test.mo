@@ -1,6 +1,6 @@
-import { test; skip } "mo:test/async"; // see https://mops.one/test
+import { test; skip } "mo:test"; // see https://mops.one/test
 
-import { stateTransition } "../src/evm_mo_backend/main";
+import { stateTransition; engine } "../src/evm_mo_backend/main";
 
 import Array "mo:base/Array";
 import Nat "mo:base/Nat";
@@ -42,8 +42,8 @@ let dummyBlockInfo: T.BlockInfo = {
 
 let hash999999 = "\ac\dc\46\01\86\f7\23\3c\92\7e\7d\b2\dc\c7\03\c0\e5\00\b6\53\ca\82\27\3b\7b\fa\d8\04\5d\85\a4\70" : Blob;
 
-func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
-    let context = await stateTransition(
+func testOpCodes(code: [T.OpCode]) : T.ExecutionContext {
+    let context = stateTransition(
         dummyTransaction,
         dummyCallerState,
         {
@@ -55,7 +55,9 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
         5, // gasPrice
         [(999_999, hash999999)], // blockHashes
         Trie.empty(), // accounts
-        dummyBlockInfo
+        dummyBlockInfo,
+        engine()
+
     );
     context;
 };
@@ -69,8 +71,8 @@ Debug.print(">");
 Debug.print(">");
 
 // 01 ADD
-await test("ADD: 1 + 2", func() : async () {
-    let context = await testOpCodes(
+test("ADD: 1 + 2", func() : () {
+    let context = testOpCodes(
         [0x60, 2, 0x60, 1, 0x01] // PUSH1 2 PUSH1 1 ADD
     );
     let result = context.stack;
@@ -78,8 +80,8 @@ await test("ADD: 1 + 2", func() : async () {
     assert(result == [3]);
 });
 
-await test("ADD: (2**256-3) + 5", func() : async () {
-    let context = await testOpCodes(
+test("ADD: (2**256-3) + 5", func() : () {
+    let context = testOpCodes(
         [0x60, 5,    // PUSH1 5
         0x7F,        // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -96,8 +98,8 @@ await test("ADD: (2**256-3) + 5", func() : async () {
     assert(result == [2]);
 });
 
-await test("ADD: stack should underflow", func() : async () {
-    let context = await testOpCodes(
+test("ADD: stack should underflow", func() : () {
+    let context = testOpCodes(
         [0x60, 2, 0x01] // PUSH1 2 ADD
     );
     let result = context.stack;
@@ -106,8 +108,8 @@ await test("ADD: stack should underflow", func() : async () {
 });
 
 // 02 MUL
-await test("MUL: 1000 * 2000", func() : async () {
-    let context = await testOpCodes(
+test("MUL: 1000 * 2000", func() : () {
+    let context = testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
         0x61, 0x03, 0xE8,  // PUSH2 0x03E8
         0x02]              // MUL
@@ -117,8 +119,8 @@ await test("MUL: 1000 * 2000", func() : async () {
     assert(result == [2_000_000]);
 });
 
-await test("MUL: (2**80-6) * (2**160-6)", func() : async () {
-    let context = await testOpCodes(
+test("MUL: (2**80-6) * (2**160-6)", func() : () {
+    let context = testOpCodes(
         [0x73,             // PUSH20 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -135,8 +137,8 @@ await test("MUL: (2**80-6) * (2**160-6)", func() : async () {
 });
 
 // 03 SUB
-await test("SUB: 8 - 20", func() : async () {
-    let context = await testOpCodes(
+test("SUB: 8 - 20", func() : () {
+    let context = testOpCodes(
         [0x60, 20, 0x60, 8, 0x03] // PUSH1 20 PUSH1 8 SUB
     );
     let result = context.stack;
@@ -145,8 +147,8 @@ await test("SUB: 8 - 20", func() : async () {
 });
 
 // 04 DIV
-await test("DIV: 20 / 3", func() : async () {
-    let context = await testOpCodes(
+test("DIV: 20 / 3", func() : () {
+    let context = testOpCodes(
         [0x60, 3, 0x60, 20, 0x04] // PUSH1 3 PUSH1 20 DIV
     );
     let result = context.stack;
@@ -154,8 +156,8 @@ await test("DIV: 20 / 3", func() : async () {
     assert(result == [6]);
 });
 
-await test("DIV: 4 / 0", func() : async () {
-    let context = await testOpCodes(
+test("DIV: 4 / 0", func() : () {
+    let context = testOpCodes(
         [0x5F, 0x60, 4, 0x04] // PUSH0 PUSH1 4 DIV
     );
     let result = context.stack;
@@ -164,8 +166,8 @@ await test("DIV: 4 / 0", func() : async () {
 });
 
 // 05 SDIV
-await test("SDIV: 10 / -2", func() : async () {
-    let context = await testOpCodes(
+test("SDIV: 10 / -2", func() : () {
+    let context = testOpCodes(
         [0x7F,      // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -183,8 +185,8 @@ await test("SDIV: 10 / -2", func() : async () {
 });
 
 // 06 MOD
-await test("MOD: (2**160-5) % (2**80-127)", func() : async () {
-    let context = await testOpCodes(
+test("MOD: (2**160-5) % (2**80-127)", func() : () {
+    let context = testOpCodes(
         [0x69,         // PUSH10 0xFFFFFFFFFFFFFFFFFF81
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0x81,
@@ -201,8 +203,8 @@ await test("MOD: (2**160-5) % (2**80-127)", func() : async () {
 });
 
 // 07 SMOD
-await test("SMOD: 10 % -3", func() : async () {
-    let context = await testOpCodes(
+test("SMOD: 10 % -3", func() : () {
+    let context = testOpCodes(
         [0x7F,      // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -219,8 +221,8 @@ await test("SMOD: 10 % -3", func() : async () {
     assert(result == [1]);
 });
 
-await test("SMOD: -10 % -3", func() : async () {
-    let context = await testOpCodes(
+test("SMOD: -10 % -3", func() : () {
+    let context = testOpCodes(
         [0x7F,      // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -245,8 +247,8 @@ await test("SMOD: -10 % -3", func() : async () {
 });
 
 // 08 ADDMOD
-await test("ADDMOD: ((2**256 - 1) + 20) % 8", func() : async () {
-    let context = await testOpCodes(
+test("ADDMOD: ((2**256 - 1) + 20) % 8", func() : () {
+    let context = testOpCodes(
         [0x60, 8,   // PUSH1 8
         0x60, 20,   // PUSH2 20
         0x7F,       // PUSH32
@@ -265,8 +267,8 @@ await test("ADDMOD: ((2**256 - 1) + 20) % 8", func() : async () {
 });
 
 // 09 MULMOD
-await test("MULMOD: ((2**256-1) * (2**256-2)) % 12", func() : async () {
-    let context = await testOpCodes(
+test("MULMOD: ((2**256-1) * (2**256-2)) % 12", func() : () {
+    let context = testOpCodes(
         [0x60, 12,  // PUSH1 12
         0x7F,       // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -292,8 +294,8 @@ await test("MULMOD: ((2**256-1) * (2**256-2)) % 12", func() : async () {
 });
 
 // 0A EXP
-await test("EXP: 10 ** 20", func() : async () {
-    let context = await testOpCodes(
+test("EXP: 10 ** 20", func() : () {
+    let context = testOpCodes(
         [0x60, 20, // PUSH2 20
         0x60, 10,  // PUSH2 10
         0x0A]      // EXP
@@ -303,8 +305,8 @@ await test("EXP: 10 ** 20", func() : async () {
     assert(result == [100_000_000_000_000_000_000]);
 });
 
-await test("EXP: 999 ** 2000", func() : async () {
-    let context = await testOpCodes(
+test("EXP: 999 ** 2000", func() : () {
+    let context = testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
         0x61, 0x03, 0xE7,  // PUSH2 0x03E7
         0x0A]              // EXP
@@ -314,8 +316,8 @@ await test("EXP: 999 ** 2000", func() : async () {
     assert(result == [0x8c06c92f7b72b6bf4d280304f7b2545e50ce90e3b62a53cd97b7f849be413181]);
 });
 
-await test("EXP: 0xD3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD3 ** 0xD1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD1", func() : async () {
-    let context = await testOpCodes(
+test("EXP: 0xD3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD3 ** 0xD1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD1", func() : () {
+    let context = testOpCodes(
         [0x7F,      // PUSH32
         0xD1, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -340,8 +342,8 @@ await test("EXP: 0xD3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 });
 
 // 0B SIGNEXTEND
-await test("SIGNEXTEND: 4 bytes, 0xFF123456", func() : async () {
-    let context = await testOpCodes(
+test("SIGNEXTEND: 4 bytes, 0xFF123456", func() : () {
+    let context = testOpCodes(
         [0x63,                  // PUSH4
         0xFF, 0x12, 0x34, 0x56, // 0xFF123456
         0x60, 3,                // PUSH1 3
@@ -353,8 +355,8 @@ await test("SIGNEXTEND: 4 bytes, 0xFF123456", func() : async () {
 });
 
 // 10 LT
-await test("LT: 1000 < 2000 (true)", func() : async () {
-    let context = await testOpCodes(
+test("LT: 1000 < 2000 (true)", func() : () {
+    let context = testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
         0x61, 0x03, 0xE8,  // PUSH2 0x03E8
         0x10]              // LT
@@ -365,8 +367,8 @@ await test("LT: 1000 < 2000 (true)", func() : async () {
 });
 
 // 11 GT
-await test("GT: 1000 > 2000 (false)", func() : async () {
-    let context = await testOpCodes(
+test("GT: 1000 > 2000 (false)", func() : () {
+    let context = testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
         0x61, 0x03, 0xE8,  // PUSH2 0x03E8
         0x11]              // GT
@@ -377,8 +379,8 @@ await test("GT: 1000 > 2000 (false)", func() : async () {
 });
 
 // 12 SLT
-await test("SLT: 1000 < -2000 (false)", func() : async () {
-    let context = await testOpCodes(
+test("SLT: 1000 < -2000 (false)", func() : () {
+    let context = testOpCodes(
         [0x7F,      // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -397,8 +399,8 @@ await test("SLT: 1000 < -2000 (false)", func() : async () {
 });
 
 // 13 SGT
-await test("SGT: 1000 > -2000 (true)", func() : async () {
-    let context = await testOpCodes(
+test("SGT: 1000 > -2000 (true)", func() : () {
+    let context = testOpCodes(
         [0x7F,       // PUSH32
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -417,8 +419,8 @@ await test("SGT: 1000 > -2000 (true)", func() : async () {
 });
 
 // 14 EQ
-await test("EQ: 1000 == 2000 (false)", func() : async () {
-    let context = await testOpCodes(
+test("EQ: 1000 == 2000 (false)", func() : () {
+    let context = testOpCodes(
         [0x61, 0x07, 0xD0, // PUSH2 0x07D0
         0x61, 0x03, 0xE8,  // PUSH2 0x03E8
         0x14]              // EQ
@@ -428,8 +430,8 @@ await test("EQ: 1000 == 2000 (false)", func() : async () {
     assert(result == [0]);
 });
 
-await test("EQ: 1000 == 1000 (true)", func() : async () {
-    let context = await testOpCodes(
+test("EQ: 1000 == 1000 (true)", func() : () {
+    let context = testOpCodes(
         [0x61, 0x03, 0xE8, // PUSH2 0x03E8
         0x61, 0x03, 0xE8,  // PUSH2 0x03E8
         0x14]              // EQ
@@ -440,8 +442,8 @@ await test("EQ: 1000 == 1000 (true)", func() : async () {
 });
 
 // 15 ISZERO
-await test("ISZERO: 1000 (false)", func() : async () {
-    let context = await testOpCodes(
+test("ISZERO: 1000 (false)", func() : () {
+    let context = testOpCodes(
         [0x61, 0x03, 0xE8, // PUSH2 0x03E8
         0x15]              // ISZERO
     );
@@ -450,8 +452,8 @@ await test("ISZERO: 1000 (false)", func() : async () {
     assert(result == [0]);
 });
 
-await test("ISZERO: 0 (true)", func() : async () {
-    let context = await testOpCodes(
+test("ISZERO: 0 (true)", func() : () {
+    let context = testOpCodes(
         [0x60, 0, // PUSH1 0
         0x15]     // ISZERO
     );
@@ -461,8 +463,8 @@ await test("ISZERO: 0 (true)", func() : async () {
 });
 
 // 16 AND
-await test("AND: 0xFF00FF & 0xF0F0F0", func() : async () {
-    let context = await testOpCodes(
+test("AND: 0xFF00FF & 0xF0F0F0", func() : () {
+    let context = testOpCodes(
         [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
         0x62, 0xF0, 0xF0, 0xF0,  // PUSH3 0xF0F0F0
         0x16]                    // AND
@@ -473,8 +475,8 @@ await test("AND: 0xFF00FF & 0xF0F0F0", func() : async () {
 });
 
 // 17 OR
-await test("OR: 0xFF00FF | 0xF0F0F0", func() : async () {
-    let context = await testOpCodes(
+test("OR: 0xFF00FF | 0xF0F0F0", func() : () {
+    let context = testOpCodes(
         [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
         0x62, 0xF0, 0xF0, 0xF0,  // PUSH3 0xF0F0F0
         0x17]                    // OR
@@ -485,8 +487,8 @@ await test("OR: 0xFF00FF | 0xF0F0F0", func() : async () {
 });
 
 // 18 XOR
-await test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : async () {
-    let context = await testOpCodes(
+test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : () {
+    let context = testOpCodes(
         [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
         0x62, 0xF0, 0xF0, 0xF0,  // PUSH3 0xF0F0F0
         0x18]                    // XOR
@@ -497,8 +499,8 @@ await test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : async () {
 });
 
 // 19 NOT
-await test("NOT: ~ 0xF0F0F0", func() : async () {
-    let context = await testOpCodes(
+test("NOT: ~ 0xF0F0F0", func() : () {
+    let context = testOpCodes(
         [0x62, 0xF0, 0xF0, 0xF0, // PUSH3 0xF0F0F0
         0x19]                    // NOT
     );
@@ -508,8 +510,8 @@ await test("NOT: ~ 0xF0F0F0", func() : async () {
 });
 
 // 1A BYTE
-await test("BYTE: 0xF1F2F3, offset = 30", func() : async () {
-    let context = await testOpCodes(
+test("BYTE: 0xF1F2F3, offset = 30", func() : () {
+    let context = testOpCodes(
         [0x62, 0xF1, 0xF2, 0xF3, // PUSH3 0xF1F2F3
         0x60, 30,                // PUSH1 30
         0x1A]                    // BYTE
@@ -520,8 +522,8 @@ await test("BYTE: 0xF1F2F3, offset = 30", func() : async () {
 });
 
 // 1B SHL
-await test("SHL: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : async () {
-    let context = await testOpCodes(
+test("SHL: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : () {
+    let context = testOpCodes(
         [0x7F,             // PUSH32
         0xFF, 0x00, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -539,8 +541,8 @@ await test("SHL: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 });
 
 // 1C SHR
-await test("SHR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : async () {
-    let context = await testOpCodes(
+test("SHR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : () {
+    let context = testOpCodes(
         [0x7F,             // PUSH32
         0xFF, 0x00, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -558,8 +560,8 @@ await test("SHR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 });
 
 // 1D SAR
-await test("SAR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : async () {
-    let context = await testOpCodes(
+test("SAR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE38, shift = 4", func() : () {
+    let context = testOpCodes(
         [0x7F,             // PUSH32
         0xFF, 0x00, 0xFF, 0xFF, 0xFF,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -585,8 +587,8 @@ Debug.print(">");
 Debug.print(">");
 
 // 30 ADDRESS
-await test("ADDRESS", func() : async () {
-    let context = await testOpCodes(
+test("ADDRESS", func() : () {
+    let context = testOpCodes(
         [0x30]    // ADDRESS
     );
     let result = context.stack;
@@ -595,8 +597,8 @@ await test("ADDRESS", func() : async () {
 });
 
 // 31 BALANCE
-await test("BALANCE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : async () {
-    let context = await testOpCodes(
+test("BALANCE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : () {
+    let context = testOpCodes(
         [0x73,                          // PUSH20
         0x00, 0xbb, 0x00, 0xbb, 0x00,   // 00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb
         0xbb, 0x00, 0xbb, 0x00, 0xbb,
@@ -610,8 +612,8 @@ await test("BALANCE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : async
 });
 
 // 32 ORIGIN
-await test("ORIGIN", func() : async () {
-    let context = await testOpCodes(
+test("ORIGIN", func() : () {
+    let context = testOpCodes(
         [0x32]    // ORIGIN
     );
     let result = context.stack;
@@ -620,8 +622,8 @@ await test("ORIGIN", func() : async () {
 });
 
 // 33 CALLER
-await test("CALLER", func() : async () {
-    let context = await testOpCodes(
+test("CALLER", func() : () {
+    let context = testOpCodes(
         [0x33]    // CALLER
     );
     let result = context.stack;
@@ -630,8 +632,8 @@ await test("CALLER", func() : async () {
 });
 
 // 34 CALLVALUE
-await test("CALLVALUE", func() : async () {
-    let context = await testOpCodes(
+test("CALLVALUE", func() : () {
+    let context = testOpCodes(
         [0x34]    // CALLVALUE
     );
     let result = context.stack;
@@ -640,8 +642,8 @@ await test("CALLVALUE", func() : async () {
 });
 
 // 35 CALLDATALOAD
-await test("CALLDATALOAD: 4", func() : async () {
-    let context = await testOpCodes(
+test("CALLDATALOAD: 4", func() : () {
+    let context = testOpCodes(
         [0x60, 3,  // PUSH1 3
         0x35]      // CALLDATALOAD
     );
@@ -651,8 +653,8 @@ await test("CALLDATALOAD: 4", func() : async () {
 });
 
 // 36 CALLDATASIZE
-await test("CALLDATASIZE", func() : async () {
-    let context = await testOpCodes(
+test("CALLDATASIZE", func() : () {
+    let context = testOpCodes(
         [0x36]    // CALLDATASIZE
     );
     let result = context.stack;
@@ -661,8 +663,8 @@ await test("CALLDATASIZE", func() : async () {
 });
 
 // 37 CALLDATACOPY
-await test("CALLDATACOPY: destOffset = 0, offset = 3, size = 5", func() : async () {
-    let context = await testOpCodes(
+test("CALLDATACOPY: destOffset = 0, offset = 3, size = 5", func() : () {
+    let context = testOpCodes(
         [0x60, 5,  // PUSH1 5
         0x60, 3,   // PUSH1 3
         0x5F,      // PUSH0
@@ -677,8 +679,8 @@ await test("CALLDATACOPY: destOffset = 0, offset = 3, size = 5", func() : async 
 });
 
 // 38 CODESIZE
-await test("CODESIZE", func() : async () {
-    let context = await testOpCodes(
+test("CODESIZE", func() : () {
+    let context = testOpCodes(
         [0x38]    // CODESIZE
     );
     let result = context.stack;
@@ -687,8 +689,8 @@ await test("CODESIZE", func() : async () {
 });
 
 // 39 CODECOPY
-await test("CODECOPY: destOffset = 0, offset = 3, size = 5", func() : async () {
-    let context = await testOpCodes(
+test("CODECOPY: destOffset = 0, offset = 3, size = 5", func() : () {
+    let context = testOpCodes(
         [0x69,                        // PUSH10
         0x01, 0x23, 0x45, 0x67, 0x89,
         0xab, 0xcd, 0xef, 0x01, 0x23, // 0x012345689abcdef0123
@@ -706,8 +708,8 @@ await test("CODECOPY: destOffset = 0, offset = 3, size = 5", func() : async () {
 });
 
 // 3A GASPRICE
-await test("GASPRICE", func() : async () {
-    let context = await testOpCodes(
+test("GASPRICE", func() : () {
+    let context = testOpCodes(
         [0x3a]    // GASPRICE
     );
     let result = context.stack;
@@ -716,8 +718,8 @@ await test("GASPRICE", func() : async () {
 });
 
 // 3B EXTCODESIZE
-await test("EXTCODESIZE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : async () {
-    let context = await testOpCodes(
+test("EXTCODESIZE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : () {
+    let context = testOpCodes(
         [0x73,                          // PUSH20
         0x00, 0xbb, 0x00, 0xbb, 0x00,   // 00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb
         0xbb, 0x00, 0xbb, 0x00, 0xbb,
@@ -730,8 +732,8 @@ await test("EXTCODESIZE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : a
     assert(result == [22]);
 });
 
-await test("EXTCODESIZE: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : async () {
-    let context = await testOpCodes(
+test("EXTCODESIZE: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : () {
+    let context = testOpCodes(
         [0x73,                          // PUSH20
         0x00, 0xaa, 0x00, 0xaa, 0x00,   // 00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa
         0xaa, 0x00, 0xaa, 0x00, 0xaa,
@@ -745,10 +747,10 @@ await test("EXTCODESIZE: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : a
 });
 
 // 3C EXTCODECOPY
-await test(
+test(
     "EXTCODECOPY: address: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb, destOffset = 0, offset = 3, size = 5",
-    func() : async () {
-    let context = await testOpCodes(
+    func() : () {
+    let context = testOpCodes(
         [0x69,                        // PUSH10
         0x01, 0x23, 0x45, 0x67, 0x89, // 0x012345689abcdef0123
         0xab, 0xcd, 0xef, 0x01, 0x23,
@@ -777,8 +779,8 @@ await test(
 // TODO - requires Execution and System Operations functions to be in place
 
 // 3F EXTCODEHASH
-await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : async () {
-    let context = await testOpCodes(
+test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : () {
+    let context = testOpCodes(
         [0x73,                          // PUSH20
         0x00, 0xaa, 0x00, 0xaa, 0x00,   // 00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa
         0xaa, 0x00, 0xaa, 0x00, 0xaa,
@@ -793,8 +795,8 @@ await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : a
 });
 
 // 40 BLOCKHASH
-await test("BLOCKHASH: 999999", func() : async () {
-    let context = await testOpCodes(
+test("BLOCKHASH: 999999", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x0f, 0x42, 0x3f,    // 0f423f
         0x40]                // BLOCKHASH
@@ -805,8 +807,8 @@ await test("BLOCKHASH: 999999", func() : async () {
 });
 
 // 41 COINBASE
-await test("CALLER", func() : async () {
-    let context = await testOpCodes(
+test("CALLER", func() : () {
+    let context = testOpCodes(
         [0x41]    // COINBASE
     );
     let result = context.stack;
@@ -815,8 +817,8 @@ await test("CALLER", func() : async () {
 });
 
 // 42 TIMESTAMP
-await test("TIMESTAMP", func() : async () {
-    let context = await testOpCodes(
+test("TIMESTAMP", func() : () {
+    let context = testOpCodes(
         [0x42]    // TIMESTAMP
     );
     let result = context.stack;
@@ -825,8 +827,8 @@ await test("TIMESTAMP", func() : async () {
 });
 
 // 43 NUMBER
-await test("NUMBER", func() : async () {
-    let context = await testOpCodes(
+test("NUMBER", func() : () {
+    let context = testOpCodes(
         [0x43]    // NUMBER
     );
     let result = context.stack;
@@ -835,8 +837,8 @@ await test("NUMBER", func() : async () {
 });
 
 // 44 DIFFICULTY
-await test("DIFFICULTY", func() : async () {
-    let context = await testOpCodes(
+test("DIFFICULTY", func() : () {
+    let context = testOpCodes(
         [0x44]    // DIFFICULTY
     );
     let result = context.stack;
@@ -845,8 +847,8 @@ await test("DIFFICULTY", func() : async () {
 });
 
 // 45 GASLIMIT
-await test("CALLER", func() : async () {
-    let context = await testOpCodes(
+test("CALLER", func() : () {
+    let context = testOpCodes(
         [0x45]    // GASLIMIT
     );
     let result = context.stack;
@@ -855,8 +857,8 @@ await test("CALLER", func() : async () {
 });
 
 // 46 CHAINID
-await test("CHAINID", func() : async () {
-    let context = await testOpCodes(
+test("CHAINID", func() : () {
+    let context = testOpCodes(
         [0x46]    // CHAINID
     );
     let result = context.stack;
@@ -865,8 +867,8 @@ await test("CHAINID", func() : async () {
 });
 
 // 47 SELFBALANCE
-await test("SELFBALANCE", func() : async () {
-    let context = await testOpCodes(
+test("SELFBALANCE", func() : () {
+    let context = testOpCodes(
         [0x47]    // SELFBALANCE
     );
     let result = context.stack;
@@ -876,8 +878,8 @@ await test("SELFBALANCE", func() : async () {
 
 // 48 BASEFEE
 // Base fee has not been included in the defined execution context.
-await test("BASEFEE", func() : async () {
-    let context = await testOpCodes(
+test("BASEFEE", func() : () {
+    let context = testOpCodes(
         [0x48]    // BASEFEE
     );
     let result = context.stack;
@@ -892,8 +894,8 @@ Debug.print(">");
 Debug.print(">");
 
 // 50 POP
-await test("POP", func() : async () {
-    let context = await testOpCodes(
+test("POP", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x12, 0x34, 0x56,    // 0x123456
         0x62,                // PUSH3
@@ -906,8 +908,8 @@ await test("POP", func() : async () {
 });
 
 // 51 MLOAD
-await test("MLOAD: 0", func() : async () {
-    let context = await testOpCodes(
+test("MLOAD: 0", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x12, 0x34, 0x56,    // 0x123456
         0x60, 0,             // PUSH1 0
@@ -921,8 +923,8 @@ await test("MLOAD: 0", func() : async () {
 });
 
 // 52 MSTORE
-await test("MSTORE: 0, 0x123456", func() : async () {
-    let context = await testOpCodes(
+test("MSTORE: 0, 0x123456", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x12, 0x34, 0x56,    // 0x123456
         0x60, 0,             // PUSH1 0
@@ -937,8 +939,8 @@ await test("MSTORE: 0, 0x123456", func() : async () {
 });
 
 // 53 MSTORE8
-await test("MSTORE8: 5, 0xff", func() : async () {
-    let context = await testOpCodes(
+test("MSTORE8: 5, 0xff", func() : () {
+    let context = testOpCodes(
         [0x60, 0xff,  // PUSH1 0xff
         0x60, 5,      // PUSH1 5
         0x53]         // MSTORE8
@@ -953,8 +955,8 @@ await test("MSTORE8: 5, 0xff", func() : async () {
 
 // 54 SLOAD &
 // 55 SSTORE
-await test("SSTORE: (42, 0x123456); SLOAD", func() : async () {
-    let context = await testOpCodes(
+test("SSTORE: (42, 0x123456); SLOAD", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x12, 0x34, 0x56,    // 0x123456
         0x60, 42,            // PUSH1 42
@@ -968,8 +970,8 @@ await test("SSTORE: (42, 0x123456); SLOAD", func() : async () {
 });
 
 // 56 JUMP
-await test("JUMP: 10", func() : async () {
-    let context = await testOpCodes(
+test("JUMP: 10", func() : () {
+    let context = testOpCodes(
         [0x60, 10,              // PUSH1 10
         0x56,                   // JUMP
         0x50, 0x50, 0x50, 0x50, // POP (x7 as dummy code)
@@ -985,8 +987,8 @@ await test("JUMP: 10", func() : async () {
 });
 
 // 57 JUMPI
-await test("JUMPI: 12, 1", func() : async () {
-    let context = await testOpCodes(
+test("JUMPI: 12, 1", func() : () {
+    let context = testOpCodes(
         [0x60, 1,               // PUSH1 1
         0x60, 12,               // PUSH1 11
         0x57,                   // JUMPI
@@ -1003,8 +1005,8 @@ await test("JUMPI: 12, 1", func() : async () {
 });
 
 // 58 PC
-await test("PC", func() : async () {
-    let context = await testOpCodes(
+test("PC", func() : () {
+    let context = testOpCodes(
         [0x60, 2,               // PUSH1 2
         0x60, 1,                // PUSH1 1
         0x01,                   // ADD
@@ -1016,8 +1018,8 @@ await test("PC", func() : async () {
 });
 
 // 59 MSIZE
-await test("MSIZE", func() : async () {
-    let context = await testOpCodes(
+test("MSIZE", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x12, 0x34, 0x56,    // 0x123456
         0x60, 2,             // PUSH1 2
@@ -1030,8 +1032,8 @@ await test("MSIZE", func() : async () {
 });
 
 // 5A GAS
-await test("GAS", func() : async () {
-    let context = await testOpCodes(
+test("GAS", func() : () {
+    let context = testOpCodes(
         [0x5f,   // PUSH0
         0x5a]    // GAS
     );
@@ -1042,8 +1044,8 @@ await test("GAS", func() : async () {
 
 // 5B JUMPDEST
 // Tested in 56 & 57 above
-await test("JUMPDEST", func() : async () {
-    let context = await testOpCodes(
+test("JUMPDEST", func() : () {
+    let context = testOpCodes(
         [0x5b,    // JUMPDEST
         0x5f]     // PUSH0
     );
@@ -1055,8 +1057,8 @@ await test("JUMPDEST", func() : async () {
 });
 
 // Dynamic gas cost & gas refund mechanism
-await test("Dynamic gas cost & gas refund", func() : async () {
-    let context = await testOpCodes(
+test("Dynamic gas cost & gas refund", func() : () {
+    let context = testOpCodes(
         [0x62,               // PUSH3
         0x12, 0x34, 0x56,    // 0x123456
         0x60, 42,            // PUSH1 42
@@ -1091,8 +1093,8 @@ Debug.print(">");
 Debug.print(">");
 
 // 5F PUSH0
-await test("PUSH0", func() : async () {
-    let context = await testOpCodes(
+test("PUSH0", func() : () {
+    let context = testOpCodes(
         [0x5f]  // PUSH0
     );
     let result = context.stack;
@@ -1101,8 +1103,8 @@ await test("PUSH0", func() : async () {
 });
 
 // 5F-7F PUSH various
-await test("PUSH0, PUSH1, PUSH2, PUSH6, PUSH12, PUSH32", func() : async () {
-    let context = await testOpCodes(
+test("PUSH0, PUSH1, PUSH2, PUSH6, PUSH12, PUSH32", func() : () {
+    let context = testOpCodes(
         [0x5f,                  // PUSH0
         0x60, 1,                // PUSH1 1
         0x61, 2, 0,             // PUSH2 0x0200
@@ -1123,8 +1125,8 @@ await test("PUSH0, PUSH1, PUSH2, PUSH6, PUSH12, PUSH32", func() : async () {
 });
 
 // 80 DUP1
-await test("DUP1", func() : async () {
-    let context = await testOpCodes(
+test("DUP1", func() : () {
+    let context = testOpCodes(
         [0x5f,                  // PUSH0
         0x60, 1,                // PUSH1 1
         0x61, 2, 0,             // PUSH2 0x0200
@@ -1147,8 +1149,8 @@ await test("DUP1", func() : async () {
 });
 
 // 83 DUP4
-await test("DUP4", func() : async () {
-    let context = await testOpCodes(
+test("DUP4", func() : () {
+    let context = testOpCodes(
         [0x5f,                  // PUSH0
         0x60, 1,                // PUSH1 1
         0x61, 2, 0,             // PUSH2 0x0200
@@ -1170,8 +1172,8 @@ await test("DUP4", func() : async () {
 });
 
 // 87 DUP8
-await test("DUP8 (should throw error)", func() : async () {
-    let context = await testOpCodes(
+test("DUP8 (should throw error)", func() : () {
+    let context = testOpCodes(
         [0x5f,                  // PUSH0
         0x60, 1,                // PUSH1 1
         0x61, 2, 0,             // PUSH2 0x0200
@@ -1192,8 +1194,8 @@ await test("DUP8 (should throw error)", func() : async () {
 });
 
 // 8F DUP16
-await test("DUP1", func() : async () {
-    let context = await testOpCodes(
+test("DUP1", func() : () {
+    let context = testOpCodes(
         [0x60, 16, // PUSH1 16
         0x60, 15,  // PUSH1 15
         0x60, 14,  // PUSH1 14
@@ -1218,8 +1220,8 @@ await test("DUP1", func() : async () {
 });
 
 // 90 SWAP1
-await test("SWAP1", func() : async () {
-    let context = await testOpCodes(
+test("SWAP1", func() : () {
+    let context = testOpCodes(
         [0x60, 16, // PUSH1 16
         0x60, 15,  // PUSH1 15
         0x60, 14,  // PUSH1 14
@@ -1244,8 +1246,8 @@ await test("SWAP1", func() : async () {
 });
 
 // 9A SWAP11
-await test("SWAP11", func() : async () {
-    let context = await testOpCodes(
+test("SWAP11", func() : () {
+    let context = testOpCodes(
         [0x60, 16, // PUSH1 16
         0x60, 15,  // PUSH1 15
         0x60, 14,  // PUSH1 14
@@ -1270,8 +1272,8 @@ await test("SWAP11", func() : async () {
 });
 
 // 9F SWAP16
-await test("SWAP16 (should throw error)", func() : async () {
-    let context = await testOpCodes(
+test("SWAP16 (should throw error)", func() : () {
+    let context = testOpCodes(
         [0x60, 16, // PUSH1 16
         0x60, 15,  // PUSH1 15
         0x60, 14,  // PUSH1 14
@@ -1296,8 +1298,8 @@ await test("SWAP16 (should throw error)", func() : async () {
 });
 
 // A0 LOG0
-await test("LOG0", func() : async () {
-    let context = await testOpCodes(
+test("LOG0", func() : () {
+    let context = testOpCodes(
         [0x7f,                          // PUSH32
         1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
         9, 10, 11, 12, 13, 14, 15, 16,
@@ -1315,8 +1317,8 @@ await test("LOG0", func() : async () {
 });
 
 // A1 LOG1
-await test("LOG1", func() : async () {
-    let context = await testOpCodes(
+test("LOG1", func() : () {
+    let context = testOpCodes(
         [0x7f,                          // PUSH32
         1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
         9, 10, 11, 12, 13, 14, 15, 16,
@@ -1337,8 +1339,8 @@ await test("LOG1", func() : async () {
 });
 
 // A2 LOG2
-await test("LOG1", func() : async () {
-    let context = await testOpCodes(
+test("LOG1", func() : () {
+    let context = testOpCodes(
         [0x7f,                          // PUSH32
         1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
         9, 10, 11, 12, 13, 14, 15, 16,
@@ -1368,8 +1370,8 @@ await test("LOG1", func() : async () {
 });
 
 // A3 LOG3
-await test("LOG3", func() : async () {
-    let context = await testOpCodes(
+test("LOG3", func() : () {
+    let context = testOpCodes(
         [0x7f,                          // PUSH32
         1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
         9, 10, 11, 12, 13, 14, 15, 16,
@@ -1403,8 +1405,8 @@ await test("LOG3", func() : async () {
 });
 
 // A4 LOG4
-await test("LOG4", func() : async () {
-    let context = await testOpCodes(
+test("LOG4", func() : () {
+    let context = testOpCodes(
         [0x7f,                          // PUSH32
         1, 2, 3, 4, 5, 6, 7, 8,         // 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
         9, 10, 11, 12, 13, 14, 15, 16,
