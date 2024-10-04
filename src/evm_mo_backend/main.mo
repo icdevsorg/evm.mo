@@ -126,6 +126,7 @@ module {
       var totalGas = tx.gasLimitTx;
       var gasRefund = 0;
       var returnData = null;
+      var staticCall = 0;
     };
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
@@ -217,6 +218,7 @@ module {
       var totalGas = gas;
       var gasRefund = 0;
       var returnData = null;
+      var staticCall = callerExVar.staticCall;
     };
 
     Vec.add(subExVar.balanceChanges, {
@@ -256,6 +258,7 @@ module {
           exVar.totalGas := newExVar.totalGas;
           exVar.gasRefund := newExVar.gasRefund;
           exVar.returnData := newExVar.returnData;
+          exVar.staticCall := newExVar.staticCall;
         };
         case (#ok(output)) {
           let newExVar = output;
@@ -273,6 +276,7 @@ module {
           exVar.totalGas := newExVar.totalGas;
           exVar.gasRefund := newExVar.gasRefund;
           exVar.returnData := newExVar.returnData;
+          exVar.staticCall := newExVar.staticCall;
         };
       };
     };
@@ -356,6 +360,7 @@ module {
       var totalGas = 0;
       var gasRefund = 0;
       var returnData = null;
+      var staticCall = 0;
     };
     newExVar;
   };
@@ -2040,6 +2045,9 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(value)) {
+            if (exVar.staticCall > 0) {
+              return #err("Disallowed opcode SSTORE called within STATICCALL")
+            };
             let valueBuffer = Buffer.Buffer<Nat8>(32);
             for (i in Iter.revRange(31, 0)) {
               valueBuffer.add(Nat8.fromNat((value % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
@@ -3752,6 +3760,9 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(size)) {
+            if (exVar.staticCall > 0) {
+              return #err("Disallowed opcode LOG0 called within STATICCALL")
+            };
             let memory_byte_size = Vec.size(exVar.memory);
             let memory_size_word = (memory_byte_size + 31) / 32;
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
@@ -3799,6 +3810,9 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(size)) {
+            if (exVar.staticCall > 0) {
+              return #err("Disallowed opcode LOG1 called within STATICCALL")
+            };
             let memory_byte_size = Vec.size(exVar.memory);
             let memory_size_word = (memory_byte_size + 31) / 32;
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
@@ -3856,6 +3870,9 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(size)) {
+            if (exVar.staticCall > 0) {
+              return #err("Disallowed opcode LOG2 called within STATICCALL")
+            };
             let memory_byte_size = Vec.size(exVar.memory);
             let memory_size_word = (memory_byte_size + 31) / 32;
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
@@ -3923,6 +3940,9 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(size)) {
+            if (exVar.staticCall > 0) {
+              return #err("Disallowed opcode LOG3 called within STATICCALL")
+            };
             let memory_byte_size = Vec.size(exVar.memory);
             let memory_size_word = (memory_byte_size + 31) / 32;
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
@@ -4000,6 +4020,9 @@ module {
         switch (exVar.stack.pop()) {
           case (#err(e)) { return #err(e) };
           case (#ok(size)) {
+            if (exVar.staticCall > 0) {
+              return #err("Disallowed opcode LOG4 called within STATICCALL")
+            };
             let memory_byte_size = Vec.size(exVar.memory);
             let memory_size_word = (memory_byte_size + 31) / 32;
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
@@ -4090,6 +4113,7 @@ module {
   };
 
   let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  // if (exVar.staticCall > 0) { return #err("Disallowed opcode CREATE called within STATICCALL") };
 
   let op_F1_CALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
@@ -4112,7 +4136,10 @@ module {
                           case (#ok(retOffset)) {
                             switch (exVar.stack.pop()) {
                               case (#err(e)) { return #err(e) };
-                              case (#ok(retSize)) {     
+                              case (#ok(retSize)) {
+                                if (exVar.staticCall > 0 and value > 0) {
+                                  return #err("Disallowed opcode CALL (value > 0) called within STATICCALL")
+                                };
                                 // get calldata from memory
                                 let memory_byte_size = Vec.size(exVar.memory);
                                 let memory_size_word = (memory_byte_size + 31) / 32;
@@ -4242,12 +4269,10 @@ module {
                                 switch (exVar.stack.push(result)) {
                                   case (#err(e)) { return #err(e) };
                                   case (#ok(_)) {
-                                    /*
-                                    code_execution_cost is the cost of the called code execution (limited by the gas parameter).
-                                    If address is warm, then address_access_cost is 100, otherwise it is 2600. See section access sets.
-                                    If value is not 0, then positive_value_cost is 9000. In this case there is also a call stipend that is given to make sure that a basic fallback function can be called. 2300 is thus removed from the cost, and also added to the gas input.
-                                    If value is not 0 and the address given points to an empty account, then value_to_empty_account_cost is 25000. An account is empty if its balance is 0, its nonce is 0 and it has no code.
-                                    */
+                                    // code_execution_cost is the cost of the called code execution (limited by the gas parameter).
+                                    // If address is warm, then address_access_cost is 100, otherwise it is 2600. (Not used in this version.)
+                                    // If value is not 0, then positive_value_cost is 9000. In this case there is also a call stipend that is given to make sure that a basic fallback function can be called. 2300 is thus removed from the cost, and also added to the gas input.
+                                    // If value is not 0 and the address given points to an empty account, then value_to_empty_account_cost is 25000. An account is empty if its balance is 0, its nonce is 0 and it has no code.
                                     var newGas: Int = exVar.totalGas - 100 - memory_expansion_cost - stipend - emptyAccountCost;
                                     if (value > 0) { newGas -= 9000; };
                                     if (newGas < 0) {
@@ -4274,7 +4299,186 @@ module {
     };
   };
 
-  let op_F2_CALLCODE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F2_CALLCODE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(gas_)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(addressNat)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(value)) {
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(argsOffset)) {
+                    switch (exVar.stack.pop()) {
+                      case (#err(e)) { return #err(e) };
+                      case (#ok(argsSize)) {
+                        switch (exVar.stack.pop()) {
+                          case (#err(e)) { return #err(e) };
+                          case (#ok(retOffset)) {
+                            switch (exVar.stack.pop()) {
+                              case (#err(e)) { return #err(e) };
+                              case (#ok(retSize)) {     
+                                // get calldata from memory
+                                let memory_byte_size = Vec.size(exVar.memory);
+                                let memory_size_word = (memory_byte_size + 31) / 32;
+                                let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                                var new_memory_cost = memory_cost;
+                                if (argsOffset + argsSize > memory_byte_size) {
+                                  let new_memory_size_word = (argsOffset + argsSize + 31) / 32;
+                                  let new_memory_byte_size = new_memory_size_word * 32;
+                                  Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+                                  new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                                };
+                                var calldata = "" : Blob;
+                                if (argsSize > 0) {
+                                  let calldataBuffer = Buffer.Buffer<Nat8>(argsSize);
+                                  for (pos in Iter.range(0, argsSize - 1)) {
+                                    calldataBuffer.add(Vec.get(exVar.memory, argsOffset + pos));
+                                  };
+                                  calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
+                                };
+                                // get code from account
+                                let addressBuffer = Buffer.Buffer<Nat8>(20);
+                                for (i in Iter.revRange(19, 0)) {
+                                  addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                                };
+                                let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+                                var code = [] : [T.OpCode];
+                                var emptyAccountCost = 0;
+                                let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                                switch (accountData) {
+                                  case (null) {
+                                    if (value > 0) {
+                                      emptyAccountCost := 25000;
+                                    };
+                                  };
+                                  case (?data) {
+                                    let decodedData = decodeAccount(data);
+                                    let codeHash = decodedData.3;
+                                    for (val in exCon.codeStore.vals()) {
+                                      if (val.0 == codeHash){ code := val.1 };
+                                    };
+                                  };
+                                };
+                                // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
+                                // the remaining gas of the current context; if more then change it
+                                var gas = gas_;
+                                if (gas > exVar.totalGas * 63 / 64) {
+                                  gas := exVar.totalGas * 63 / 64;
+                                };
+                                var stipend = 0;
+                                if (value > 0) { stipend := 2300; };
+                                gas += stipend;
+                                // check caller balance
+                                let callerAddress = exCon.caller;
+                                let callerAccountData = Trie.get(exCon.accounts, key callerAddress, Blob.equal);
+                                var callerBalance = 0;
+                                switch (callerAccountData) {
+                                  case (null) {};
+                                  case (?data) {
+                                    let decodedData = decodeAccount(data);
+                                    callerBalance := decodedData.1;
+                                  };
+                                };
+                                for (change in Vec.vals(exVar.balanceChanges)) {
+                                  if (change.from == exCon.caller) {callerBalance -= change.amount};
+                                  if (change.to == exCon.caller) {callerBalance += change.amount};
+                                };
+                                // if value <= caller balance then run subcontext
+                                // otherwise the call fails but the current context is not reverted
+                                var result = 0; // 1 if successful
+                                var memory_expansion_cost = 0;
+                                if (value <= callerBalance) {
+                                  switch (executeSubcontext(
+                                    code,
+                                    gas,
+                                    value,
+                                    exCon.caller, // uses own address
+                                    calldata,
+                                    exCon,
+                                    exVar,
+                                    engineInstance
+                                  )) {
+                                    case (#err(e)) {
+                                      Debug.print("Subcontext reverted");
+                                    };
+                                    case (#ok(subcontext)) {
+                                      // store return data in memory
+                                      var returnData = "" : Blob;
+                                      switch (subcontext.returnData) {
+                                        case (null) {};
+                                        case (?returnData_) {
+                                          returnData := returnData_;
+                                          var returnDataArray = Blob.toArray(returnData);
+                                          if (returnDataArray.size() > retSize) {
+                                            let resizedArray = Array.subArray<Nat8>(returnDataArray, 0, retSize);
+                                            returnData := Blob.fromArray(resizedArray);
+                                          };
+                                          let memory_byte_size = Vec.size(exVar.memory);
+                                          let memory_size_word = (memory_byte_size + 31) / 32;
+                                          let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                                          var new_memory_cost = memory_cost;
+                                          if (retOffset + retSize > memory_byte_size) {
+                                            let new_memory_size_word = (retOffset + retSize + 31) / 32;
+                                            let new_memory_byte_size = new_memory_size_word * 32;
+                                            let mem_incr = new_memory_byte_size - memory_byte_size;
+                                            Vec.addMany(exVar.memory, mem_incr, Nat8.fromNat(0));
+                                            new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                                          };
+                                          var pos = retOffset;
+                                          for (byte in returnData.vals()) {
+                                            Vec.put(exVar.memory, pos, byte);
+                                            pos += 1;
+                                          };
+                                          memory_expansion_cost := new_memory_cost - memory_cost;
+                                        };
+                                      };
+                                      // persist state changes from subcontext
+                                      exVar.balanceChanges := subcontext.balanceChanges;
+                                      exVar.storageChanges := subcontext.storageChanges;
+                                      exVar.codeAdditions := subcontext.codeAdditions;
+                                      exVar.codeStore := subcontext.codeStore;
+                                      exVar.storageStore := subcontext.storageStore;
+                                      exVar.logs := subcontext.logs;
+                                    };
+                                  };
+                                };
+                                // success?
+                                switch (exVar.stack.push(result)) {
+                                  case (#err(e)) { return #err(e) };
+                                  case (#ok(_)) {
+                                    // code_execution_cost is the cost of the called code execution (limited by the gas parameter).
+                                    // If address is warm, then address_access_cost is 100, otherwise it is 2600. (Not used in this version.)
+                                    // If value is not 0, then positive_value_cost is 9000. In this case there is also a call stipend that is given to make sure that a basic fallback function can be called. 2300 is thus removed from the cost, and also added to the gas input.
+                                    // If value is not 0 and the address given points to an empty account, then value_to_empty_account_cost is 25000. An account is empty if its balance is 0, its nonce is 0 and it has no code.
+                                    var newGas: Int = exVar.totalGas - 100 - memory_expansion_cost - stipend - emptyAccountCost;
+                                    if (value > 0) { newGas -= 9000; };
+                                    if (newGas < 0) {
+                                      return #err("Out of gas")
+                                      } else {
+                                      exVar.totalGas := Int.abs(newGas);
+                                      return #ok(exVar);
+                                    };
+                                  };
+                                };
+                              };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_F3_RETURN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     exVar.programCounter := Array.size(exCon.code);
@@ -4317,11 +4521,341 @@ module {
     };
   };
 
-  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(gas_)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(addressNat)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(argsOffset)) {
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(argsSize)) {
+                    switch (exVar.stack.pop()) {
+                      case (#err(e)) { return #err(e) };
+                      case (#ok(retOffset)) {
+                        switch (exVar.stack.pop()) {
+                          case (#err(e)) { return #err(e) };
+                          case (#ok(retSize)) {
+                            // persist current context value
+                            let value = exCon.incomingEth;
+                            // get calldata from memory
+                            let memory_byte_size = Vec.size(exVar.memory);
+                            let memory_size_word = (memory_byte_size + 31) / 32;
+                            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                            var new_memory_cost = memory_cost;
+                            if (argsOffset + argsSize > memory_byte_size) {
+                              let new_memory_size_word = (argsOffset + argsSize + 31) / 32;
+                              let new_memory_byte_size = new_memory_size_word * 32;
+                              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+                              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                            };
+                            var calldata = "" : Blob;
+                            if (argsSize > 0) {
+                              let calldataBuffer = Buffer.Buffer<Nat8>(argsSize);
+                              for (pos in Iter.range(0, argsSize - 1)) {
+                                calldataBuffer.add(Vec.get(exVar.memory, argsOffset + pos));
+                              };
+                              calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
+                            };
+                            // get code from account
+                            let addressBuffer = Buffer.Buffer<Nat8>(20);
+                            for (i in Iter.revRange(19, 0)) {
+                              addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                            };
+                            let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+                            var code = [] : [T.OpCode];
+                            var emptyAccountCost = 0;
+                            let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                            switch (accountData) {
+                              case (null) {
+                                if (value > 0) {
+                                  emptyAccountCost := 25000;
+                                };
+                              };
+                              case (?data) {
+                                let decodedData = decodeAccount(data);
+                                let codeHash = decodedData.3;
+                                for (val in exCon.codeStore.vals()) {
+                                  if (val.0 == codeHash){ code := val.1 };
+                                };
+                              };
+                            };
+                            // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
+                            // the remaining gas of the current context; if more then change it
+                            var gas = gas_;
+                            if (gas > exVar.totalGas * 63 / 64) {
+                              gas := exVar.totalGas * 63 / 64;
+                            };
+                            var stipend = 0;
+                            if (value > 0) { stipend := 2300; };
+                            gas += stipend;
+                            // check caller balance
+                            let callerAddress = exCon.caller;
+                            let callerAccountData = Trie.get(exCon.accounts, key callerAddress, Blob.equal);
+                            var callerBalance = 0;
+                            switch (callerAccountData) {
+                              case (null) {};
+                              case (?data) {
+                                let decodedData = decodeAccount(data);
+                                callerBalance := decodedData.1;
+                              };
+                            };
+                            for (change in Vec.vals(exVar.balanceChanges)) {
+                              if (change.from == exCon.caller) {callerBalance -= change.amount};
+                              if (change.to == exCon.caller) {callerBalance += change.amount};
+                            };
+                            // if value <= caller balance then run subcontext
+                            // otherwise the call fails but the current context is not reverted
+                            var result = 0; // 1 if successful
+                            var memory_expansion_cost = 0;
+                            if (value <= callerBalance) {
+                              switch (executeSubcontext(
+                                code,
+                                gas,
+                                value,
+                                exCon.caller, // uses own address
+                                calldata,
+                                exCon,
+                                exVar,
+                                engineInstance
+                              )) {
+                                case (#err(e)) {
+                                  Debug.print("Subcontext reverted");
+                                };
+                                case (#ok(subcontext)) {
+                                  // store return data in memory
+                                  var returnData = "" : Blob;
+                                  switch (subcontext.returnData) {
+                                    case (null) {};
+                                    case (?returnData_) {
+                                      returnData := returnData_;
+                                      var returnDataArray = Blob.toArray(returnData);
+                                      if (returnDataArray.size() > retSize) {
+                                        let resizedArray = Array.subArray<Nat8>(returnDataArray, 0, retSize);
+                                        returnData := Blob.fromArray(resizedArray);
+                                      };
+                                      let memory_byte_size = Vec.size(exVar.memory);
+                                      let memory_size_word = (memory_byte_size + 31) / 32;
+                                      let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                                      var new_memory_cost = memory_cost;
+                                      if (retOffset + retSize > memory_byte_size) {
+                                        let new_memory_size_word = (retOffset + retSize + 31) / 32;
+                                        let new_memory_byte_size = new_memory_size_word * 32;
+                                        let mem_incr = new_memory_byte_size - memory_byte_size;
+                                        Vec.addMany(exVar.memory, mem_incr, Nat8.fromNat(0));
+                                        new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                                      };
+                                      var pos = retOffset;
+                                      for (byte in returnData.vals()) {
+                                        Vec.put(exVar.memory, pos, byte);
+                                        pos += 1;
+                                      };
+                                      memory_expansion_cost := new_memory_cost - memory_cost;
+                                    };
+                                  };
+                                  // persist state changes from subcontext
+                                  exVar.balanceChanges := subcontext.balanceChanges;
+                                  exVar.storageChanges := subcontext.storageChanges;
+                                  exVar.codeAdditions := subcontext.codeAdditions;
+                                  exVar.codeStore := subcontext.codeStore;
+                                  exVar.storageStore := subcontext.storageStore;
+                                  exVar.logs := subcontext.logs;
+                                };
+                              };
+                            };
+                            // success?
+                            switch (exVar.stack.push(result)) {
+                              case (#err(e)) { return #err(e) };
+                              case (#ok(_)) {
+                                // code_execution_cost is the cost of the called code execution (limited by the gas parameter).
+                                // If address is warm, then address_access_cost is 100, otherwise it is 2600. (Not used in this version.)
+                                // If value is not 0, then positive_value_cost is 9000. In this case there is also a call stipend that is given to make sure that a basic fallback function can be called. 2300 is thus removed from the cost, and also added to the gas input.
+                                // If value is not 0 and the address given points to an empty account, then value_to_empty_account_cost is 25000. An account is empty if its balance is 0, its nonce is 0 and it has no code.
+                                var newGas: Int = exVar.totalGas - 100 - memory_expansion_cost - stipend - emptyAccountCost;
+                                if (value > 0) { newGas -= 9000; };
+                                if (newGas < 0) {
+                                  return #err("Out of gas")
+                                  } else {
+                                  exVar.totalGas := Int.abs(newGas);
+                                  return #ok(exVar);
+                                };
+                              };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_F5_CREATE2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  // if (exVar.staticCall > 0) { return #err("Disallowed opcode CREATE2 called within STATICCALL") };
 
-  let op_FA_STATICCALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FA_STATICCALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(gas_)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(addressNat)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(argsOffset)) {
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(argsSize)) {
+                    switch (exVar.stack.pop()) {
+                      case (#err(e)) { return #err(e) };
+                      case (#ok(retOffset)) {
+                        switch (exVar.stack.pop()) {
+                          case (#err(e)) { return #err(e) };
+                          case (#ok(retSize)) {
+                            // set value to 0
+                            let value = 0;
+                            // get calldata from memory
+                            let memory_byte_size = Vec.size(exVar.memory);
+                            let memory_size_word = (memory_byte_size + 31) / 32;
+                            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                            var new_memory_cost = memory_cost;
+                            if (argsOffset + argsSize > memory_byte_size) {
+                              let new_memory_size_word = (argsOffset + argsSize + 31) / 32;
+                              let new_memory_byte_size = new_memory_size_word * 32;
+                              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+                              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                            };
+                            var calldata = "" : Blob;
+                            if (argsSize > 0) {
+                              let calldataBuffer = Buffer.Buffer<Nat8>(argsSize);
+                              for (pos in Iter.range(0, argsSize - 1)) {
+                                calldataBuffer.add(Vec.get(exVar.memory, argsOffset + pos));
+                              };
+                              calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
+                            };
+                            // get code from account
+                            let addressBuffer = Buffer.Buffer<Nat8>(20);
+                            for (i in Iter.revRange(19, 0)) {
+                              addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                            };
+                            let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+                            var code = [] : [T.OpCode];
+                            var emptyAccountCost = 0;
+                            let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                            switch (accountData) {
+                              case (null) {
+                                if (value > 0) {
+                                  emptyAccountCost := 25000;
+                                };
+                              };
+                              case (?data) {
+                                let decodedData = decodeAccount(data);
+                                let codeHash = decodedData.3;
+                                for (val in exCon.codeStore.vals()) {
+                                  if (val.0 == codeHash){ code := val.1 };
+                                };
+                              };
+                            };
+                            // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
+                            // the remaining gas of the current context; if more then change it
+                            var gas = gas_;
+                            if (gas > exVar.totalGas * 63 / 64) {
+                              gas := exVar.totalGas * 63 / 64;
+                            };
+                            var stipend = 0;
+                            if (value > 0) { stipend := 2300; };
+                            gas += stipend;
+                            // run subcontext
+                            exVar.staticCall += 1; // used for detecting disallowed opcodes
+                            var result = 0; // 1 if successful
+                            var memory_expansion_cost = 0;
+                            switch (executeSubcontext(
+                              code,
+                              gas,
+                              value,
+                              address,
+                              calldata,
+                              exCon,
+                              exVar,
+                              engineInstance
+                            )) {
+                              case (#err(e)) {
+                                Debug.print("Subcontext reverted");
+                              };
+                              case (#ok(subcontext)) {
+                                // store return data in memory
+                                var returnData = "" : Blob;
+                                switch (subcontext.returnData) {
+                                  case (null) {};
+                                  case (?returnData_) {
+                                    returnData := returnData_;
+                                    var returnDataArray = Blob.toArray(returnData);
+                                    if (returnDataArray.size() > retSize) {
+                                      let resizedArray = Array.subArray<Nat8>(returnDataArray, 0, retSize);
+                                      returnData := Blob.fromArray(resizedArray);
+                                    };
+                                    let memory_byte_size = Vec.size(exVar.memory);
+                                    let memory_size_word = (memory_byte_size + 31) / 32;
+                                    let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                                    var new_memory_cost = memory_cost;
+                                    if (retOffset + retSize > memory_byte_size) {
+                                      let new_memory_size_word = (retOffset + retSize + 31) / 32;
+                                      let new_memory_byte_size = new_memory_size_word * 32;
+                                      let mem_incr = new_memory_byte_size - memory_byte_size;
+                                      Vec.addMany(exVar.memory, mem_incr, Nat8.fromNat(0));
+                                      new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                                    };
+                                    var pos = retOffset;
+                                    for (byte in returnData.vals()) {
+                                      Vec.put(exVar.memory, pos, byte);
+                                      pos += 1;
+                                    };
+                                    memory_expansion_cost := new_memory_cost - memory_cost;
+                                  };
+                                };
+                              };
+                            };
+                            exVar.staticCall -= 1;
+                            // success?
+                            switch (exVar.stack.push(result)) {
+                              case (#err(e)) { return #err(e) };
+                              case (#ok(_)) {
+                                // code_execution_cost is the cost of the called code execution (limited by the gas parameter).
+                                // If address is warm, then address_access_cost is 100, otherwise it is 2600. (Not used in this version.)
+                                // If value is not 0, then positive_value_cost is 9000. In this case there is also a call stipend that is given to make sure that a basic fallback function can be called. 2300 is thus removed from the cost, and also added to the gas input.
+                                // If value is not 0 and the address given points to an empty account, then value_to_empty_account_cost is 25000. An account is empty if its balance is 0, its nonce is 0 and it has no code.
+                                var newGas: Int = exVar.totalGas - 100 - memory_expansion_cost - stipend - emptyAccountCost;
+                                if (value > 0) { newGas -= 9000; };
+                                if (newGas < 0) {
+                                  return #err("Out of gas")
+                                  } else {
+                                  exVar.totalGas := Int.abs(newGas);
+                                  return #ok(exVar);
+                                };
+                              };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_FB_TXHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
@@ -4383,6 +4917,7 @@ module {
   };
 
   let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  // if (exVar.staticCall > 0) { return #err("Disallowed opcode SELFDESTRUCT called within STATICCALL") };
 
 
   // Other
