@@ -1,7 +1,9 @@
 import Trie "mo:base/Trie";
+import Result "mo:base/Result";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import EVMStack "evmStack";
+
 
 module {
   public type Address = Blob;
@@ -133,4 +135,6 @@ module {
     blockCoinbase: Blob;
     chainId: Nat;
   };
+
+  public type Engine = [(ExecutionContext, ExecutionVariables, Engine) -> Result.Result<ExecutionVariables, Text>];
 };

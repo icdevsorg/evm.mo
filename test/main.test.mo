@@ -1,6 +1,6 @@
 import { test; skip } "mo:test/async"; // see https://mops.one/test
 
-import { stateTransition } "../src/evm_mo_backend/main";
+import { stateTransition; engine } "../src/evm_mo_backend/main";
 
 import Array "mo:base/Array";
 import Nat "mo:base/Nat";
@@ -55,7 +55,8 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
         5, // gasPrice
         [(999_999, hash999999)], // blockHashes
         Trie.empty(), // accounts
-        dummyBlockInfo
+        dummyBlockInfo,
+        engine()
     );
     context;
 };

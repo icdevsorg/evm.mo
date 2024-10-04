@@ -24,7 +24,6 @@ import T "types";
 module {
   
   type Result<Ok, Err> = { #ok: Ok; #err: Err};
-  type Engine = [(T.ExecutionContext, T.ExecutionVariables) -> Result<T.ExecutionVariables, Text>];
   type Vec<X> = Vec.Vector<X>;
   type Map<K, V> = Map.Map<K, V>;
   type Trie<K, V> = Trie.Trie<K, V>;
@@ -38,7 +37,8 @@ module {
     gasPrice: Nat,
     blockHashes: [(Nat, Blob)], // changed from Vec<(Nat, Blob)> to Array
     accounts: Trie<Blob, Blob>,
-    blockInfo: T.BlockInfo
+    blockInfo: T.BlockInfo,
+    engineInstance : T.Engine
   ) : async T.ExecutionContext {
     // Add (or replace) caller and callee details in accounts Trie
     let encodedCallerState = encodeAccount((callerState.nonce, callerState.balance, getStorageRoot(callerState.storage), getCodeHash(callerState.code)));
@@ -130,7 +130,7 @@ module {
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
     if (calleeState.code != []) {
-      executeCode(exCon, exVar).0;
+      executeCode(exCon, exVar, engineInstance).0;
     } else {
       exCon;
     };
@@ -145,7 +145,8 @@ module {
     callee: T.Address,
     calldata: Blob,
     callerExCon: T.ExecutionContext,
-    callerExVar : T.ExecutionVariables
+    callerExVar : T.ExecutionVariables,
+    engineInstance : T.Engine
   ) : Result<T.ExecutionVariables, Text> {
     // Check Transaction has right number of values => will trap if not
     // Check that nonce matches nonce in sender's account => TODO
@@ -226,19 +227,19 @@ module {
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
     if (code != []) {
-      return #ok(executeCode(subExCon, subExVar).1);
+      return #ok(executeCode(subExCon, subExVar, engineInstance).1);
     } else {
       return #ok(subExVar);
     };
   };
 
-  func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : (T.ExecutionContext, T.ExecutionVariables) {
+  func executeCode(exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : (T.ExecutionContext, T.ExecutionVariables) {
     let codeSize = Array.size(exCon.code);
     while (Int.abs(exVar.programCounter) < codeSize) {
       // get current instruction from code[programCounter]
       let instruction = exCon.code[Int.abs(exVar.programCounter)];
       // execute instruction via OPCODE functions
-      switch (engine[Nat8.toNat(instruction)](exCon, exVar)) {
+      switch (engineInstance[Nat8.toNat(instruction)](exCon, exVar, engineInstance)) {
         case (#err(e)) {
           Debug.print("Error: " # e);
           let newExVar = revert(exCon);
@@ -376,7 +377,7 @@ module {
 
   // Basic Math and Bitwise Logic
 
-  let op_01_ADD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_01_ADD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     // pop two values from the stack; returns error if stack is empty
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
@@ -405,7 +406,7 @@ module {
     };
   };
 
-  let op_02_MUL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_02_MUL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -430,7 +431,7 @@ module {
     };
   };
 
-  let op_03_SUB = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_03_SUB = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -456,7 +457,7 @@ module {
     };
   };
 
-  let op_04_DIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_04_DIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -481,7 +482,7 @@ module {
     };
   };
 
-  let op_05_SDIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_05_SDIV = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -514,7 +515,7 @@ module {
     };
   };
 
-  let op_06_MOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_06_MOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -539,7 +540,7 @@ module {
     };
   };
 
-  let op_07_SMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_07_SMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -572,7 +573,7 @@ module {
     };
   };
 
-  let op_08_ADDMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_08_ADDMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -602,7 +603,7 @@ module {
     };
   };
 
-  let op_09_MULMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_09_MULMOD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -632,7 +633,7 @@ module {
     };
   };
 
-  let op_0A_EXP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {    switch (exVar.stack.pop()) {
+  let op_0A_EXP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {    switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
         switch (exVar.stack.pop()) {
@@ -670,7 +671,7 @@ module {
     };
   };
 
-  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_0B_SIGNEXTEND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(b)) {
@@ -699,7 +700,7 @@ module {
     };
   };
 
-  let op_10_LT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_10_LT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -727,7 +728,7 @@ module {
     };
   };
 
-  let op_11_GT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_11_GT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -755,7 +756,7 @@ module {
     };
   };
 
-  let op_12_SLT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_12_SLT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -787,7 +788,7 @@ module {
     };
   };
 
-  let op_13_SGT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_13_SGT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -819,7 +820,7 @@ module {
     };
   };
 
-  let op_14_EQ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_14_EQ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -847,7 +848,7 @@ module {
     };
   };
 
-  let op_15_ISZERO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_15_ISZERO = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -870,7 +871,7 @@ module {
     };
   };
 
-  let op_16_AND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_16_AND = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -903,7 +904,7 @@ module {
     };
   };
 
-  let op_17_OR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_17_OR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -936,7 +937,7 @@ module {
     };
   };
 
-  let op_18_XOR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_18_XOR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -969,7 +970,7 @@ module {
     };
   };
 
-  let op_19_NOT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_19_NOT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -989,7 +990,7 @@ module {
     };
   };
 
-  let op_1A_BYTE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_1A_BYTE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(i)) {
@@ -1018,7 +1019,7 @@ module {
     };
   };
 
-  let op_1B_SHL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_1B_SHL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(shift)) {
@@ -1043,7 +1044,7 @@ module {
     };
   };
 
-  let op_1C_SHR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_1C_SHR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(shift)) {
@@ -1068,7 +1069,7 @@ module {
     };
   };
 
-  let op_1D_SAR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_1D_SAR = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(shift)) {
@@ -1099,7 +1100,7 @@ module {
 
   // Environmental Information and Block Information
 
-  let op_30_ADDRESS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_30_ADDRESS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.callee.vals()) {
@@ -1120,7 +1121,7 @@ module {
     };
   };
 
-  let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_31_BALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(addressNat)) {
@@ -1157,7 +1158,7 @@ module {
     };
   };
   
-  let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_32_ORIGIN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.origin.vals()) {
@@ -1178,7 +1179,7 @@ module {
     };
   };
 
-  let op_33_CALLER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_33_CALLER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.caller.vals()) {
@@ -1199,7 +1200,7 @@ module {
     };
   };
 
-  let op_34_CALLVALUE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_34_CALLVALUE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.incomingEth)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1214,7 +1215,7 @@ module {
     };
   };
 
-  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_35_CALLDATALOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(i)) {
@@ -1247,7 +1248,7 @@ module {
     };
   };
 
-  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_36_CALLDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.calldata.size())) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1262,7 +1263,7 @@ module {
     };
   };
 
-  let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_37_CALLDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(destOffset)) {
@@ -1310,7 +1311,7 @@ module {
     };
   };
 
-  let op_38_CODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_38_CODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.code.size())) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1325,7 +1326,7 @@ module {
     };
   };
 
-  let op_39_CODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_39_CODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(destOffset)) {
@@ -1373,7 +1374,7 @@ module {
     };
   };
 
-  let op_3A_GASPRICE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_3A_GASPRICE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.gasPrice)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1388,7 +1389,7 @@ module {
     };
   };
 
-  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_3B_EXTCODESIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(addressNat)) {
@@ -1446,7 +1447,7 @@ module {
     };
   };
 
-  let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_3C_EXTCODECOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(addressNat)) {
@@ -1537,7 +1538,7 @@ module {
     };
   };
 
-  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var returnDataSize = 0;
     switch (exVar.returnData) {
       case (null) {};
@@ -1559,7 +1560,7 @@ module {
     };
   };
 
-  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var returnData = "" : Blob;
     var returnDataSize = 0;
     switch (exVar.returnData) {
@@ -1619,7 +1620,7 @@ module {
     };
   };
 
-  let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_3F_EXTCODEHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(addressNat)) {
@@ -1679,7 +1680,7 @@ module {
     };
   };
 
-  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_40_BLOCKHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(blockNumber)) {
@@ -1708,7 +1709,7 @@ module {
     };
   };
 
-  let op_41_COINBASE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_41_COINBASE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var pos: Nat = 20;
     var result: Nat = 0;
     for (byte: Nat8 in exCon.blockInfo.coinbase.vals()) {
@@ -1729,7 +1730,7 @@ module {
     };
   };
 
-  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_42_TIMESTAMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.blockInfo.timestamp)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1744,7 +1745,7 @@ module {
     };
   };
 
-  let op_43_NUMBER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_43_NUMBER = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.blockInfo.number)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1759,7 +1760,7 @@ module {
     };
   };
 
-  let op_44_DIFFICULTY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_44_DIFFICULTY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.blockInfo.difficulty)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1774,7 +1775,7 @@ module {
     };
   };
 
-  let op_45_GASLIMIT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_45_GASLIMIT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.blockInfo.gasLimit)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1789,7 +1790,7 @@ module {
     };
   };
 
-  let op_46_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_46_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(exCon.blockInfo.chainId)) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1804,7 +1805,7 @@ module {
     };
   };
 
-  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_47_SELFBALANCE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let address = exCon.caller;
     let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
     var balance = 0;
@@ -1832,7 +1833,7 @@ module {
     };
   };
 
-  let op_48_BASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_48_BASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(0)) { // Base fee has not been included in the defined execution context.
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -1850,7 +1851,7 @@ module {
 
   // Memory Operations
 
-  let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_50_POP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(y)) {
@@ -1864,7 +1865,7 @@ module {
     };
   };
 
-  let op_51_MLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_51_MLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -1899,7 +1900,7 @@ module {
     };
   };
 
-  let op_52_MSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_52_MSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -1939,7 +1940,7 @@ module {
     };
   };
 
-  let op_53_MSTORE8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_53_MSTORE8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -1972,7 +1973,7 @@ module {
     };
   };
 
-  let op_54_SLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_54_SLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(keyNat)) {
@@ -2027,7 +2028,7 @@ module {
     };
   };
 
-  let op_55_SSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_55_SSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(keyNat)) {
@@ -2123,7 +2124,7 @@ module {
     };
   };
 
-  let op_56_JUMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_56_JUMP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(counter)) {
@@ -2143,7 +2144,7 @@ module {
     };
   };
 
-  let op_57_JUMPI = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_57_JUMPI = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(counter)) {
@@ -2170,7 +2171,7 @@ module {
     };
   };
 
-  let op_58_PC = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_58_PC = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(Int.abs(exVar.programCounter))) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -2185,7 +2186,7 @@ module {
     };
   };
 
-  let op_59_MSIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_59_MSIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(Vec.size(exVar.memory))) {
       case (#err(e)) { return #err(e) };
       case (#ok(_)) {
@@ -2200,7 +2201,7 @@ module {
     };
   };
 
-  let op_5A_GAS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_5A_GAS = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let newGas: Int = exVar.totalGas - 2;
     if (newGas < 0) {
       return #err("Out of gas")
@@ -2213,7 +2214,7 @@ module {
     };
   };
 
-  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_5B_JUMPDEST = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let newGas: Int = exVar.totalGas - 1;
     if (newGas < 0) {
       return #err("Out of gas")
@@ -2226,7 +2227,7 @@ module {
 
   // Push Operations, Duplication Operations, Exchange Operations
   
-  let op_5F_PUSH0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_5F_PUSH0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.push(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(())) {
@@ -2241,7 +2242,7 @@ module {
     };
   };
 
-  let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_60_PUSH1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     // check that there are enough operands
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + 2) {return #err("Not enough operands")};
     switch (exVar.stack.push(Nat8.toNat(exCon.code[Int.abs(exVar.programCounter) + 1]))) {
@@ -2259,7 +2260,7 @@ module {
     };
   };
 
-  let op_61_PUSH2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_61_PUSH2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 2;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2281,7 +2282,7 @@ module {
     };
   };
 
-  let op_62_PUSH3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_62_PUSH3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 3;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2303,7 +2304,7 @@ module {
     };
   };
 
-  let op_63_PUSH4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_63_PUSH4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 4;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2325,7 +2326,7 @@ module {
     };
   };
 
-  let op_64_PUSH5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_64_PUSH5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 5;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2347,7 +2348,7 @@ module {
     };
   };
 
-  let op_65_PUSH6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_65_PUSH6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 6;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2369,7 +2370,7 @@ module {
     };
   };
 
-  let op_66_PUSH7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_66_PUSH7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 7;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2391,7 +2392,7 @@ module {
     };
   };
 
-  let op_67_PUSH8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_67_PUSH8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 8;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2413,7 +2414,7 @@ module {
     };
   };
 
-  let op_68_PUSH9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_68_PUSH9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 9;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2435,7 +2436,7 @@ module {
     };
   };
 
-  let op_69_PUSH10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_69_PUSH10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 10;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2457,7 +2458,7 @@ module {
     };
   };
 
-  let op_6A_PUSH11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_6A_PUSH11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 11;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2479,7 +2480,7 @@ module {
     };
   };
 
-  let op_6B_PUSH12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_6B_PUSH12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 12;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2501,7 +2502,7 @@ module {
     };
   };
 
-  let op_6C_PUSH13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_6C_PUSH13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 13;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2523,7 +2524,7 @@ module {
     };
   };
 
-  let op_6D_PUSH14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_6D_PUSH14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 14;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2545,7 +2546,7 @@ module {
     };
   };
 
-  let op_6E_PUSH15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_6E_PUSH15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 15;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2567,7 +2568,7 @@ module {
     };
   };
 
-  let op_6F_PUSH16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_6F_PUSH16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 16;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2589,7 +2590,7 @@ module {
     };
   };
 
-  let op_70_PUSH17 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_70_PUSH17 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 17;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2611,7 +2612,7 @@ module {
     };
   };
 
-  let op_71_PUSH18 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_71_PUSH18 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 18;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2633,7 +2634,7 @@ module {
     };
   };
 
-  let op_72_PUSH19 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_72_PUSH19 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 19;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2655,7 +2656,7 @@ module {
     };
   };
 
-  let op_73_PUSH20 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_73_PUSH20 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 20;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2677,7 +2678,7 @@ module {
     };
   };
 
-  let op_74_PUSH21 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_74_PUSH21 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 21;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2699,7 +2700,7 @@ module {
     };
   };
 
-  let op_75_PUSH22 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_75_PUSH22 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 22;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2721,7 +2722,7 @@ module {
     };
   };
 
-  let op_76_PUSH23 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_76_PUSH23 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 23;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2743,7 +2744,7 @@ module {
     };
   };
 
-  let op_77_PUSH24 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_77_PUSH24 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 24;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2765,7 +2766,7 @@ module {
     };
   };
 
-  let op_78_PUSH25 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_78_PUSH25 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 25;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2787,7 +2788,7 @@ module {
     };
   };
 
-  let op_79_PUSH26 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_79_PUSH26 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 26;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2809,7 +2810,7 @@ module {
     };
   };
 
-  let op_7A_PUSH27 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_7A_PUSH27 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 27;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2831,7 +2832,7 @@ module {
     };
   };
 
-  let op_7B_PUSH28 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_7B_PUSH28 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 28;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2853,7 +2854,7 @@ module {
     };
   };
 
-  let op_7C_PUSH29 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_7C_PUSH29 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 29;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2875,7 +2876,7 @@ module {
     };
   };
 
-  let op_7D_PUSH30 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_7D_PUSH30 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 30;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2897,7 +2898,7 @@ module {
     };
   };
 
-  let op_7E_PUSH31 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_7E_PUSH31 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 31;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2919,7 +2920,7 @@ module {
     };
   };
 
-  let op_7F_PUSH32 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_7F_PUSH32 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     let bytes = 32;
     if (Array.size(exCon.code) < Int.abs(exVar.programCounter) + bytes + 1) {return #err("Not enough operands")};
     var value: Nat = 0;
@@ -2941,7 +2942,7 @@ module {
     };
   };
 
-  let op_80_DUP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_80_DUP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -2961,7 +2962,7 @@ module {
     };
   };
 
-  let op_81_DUP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_81_DUP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(1)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -2981,7 +2982,7 @@ module {
     };
   };
 
-  let op_82_DUP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_82_DUP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(2)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3001,7 +3002,7 @@ module {
     };
   };
 
-  let op_83_DUP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_83_DUP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(3)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3021,7 +3022,7 @@ module {
     };
   };
 
-  let op_84_DUP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_84_DUP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(4)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3041,7 +3042,7 @@ module {
     };
   };
 
-  let op_85_DUP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_85_DUP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(5)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3061,7 +3062,7 @@ module {
     };
   };
 
-  let op_86_DUP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_86_DUP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(6)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3081,7 +3082,7 @@ module {
     };
   };
 
-  let op_87_DUP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_87_DUP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(7)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3101,7 +3102,7 @@ module {
     };
   };
 
-  let op_88_DUP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_88_DUP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(8)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3121,7 +3122,7 @@ module {
     };
   };
 
-  let op_89_DUP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_89_DUP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(9)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3141,7 +3142,7 @@ module {
     };
   };
 
-  let op_8A_DUP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_8A_DUP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(10)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3161,7 +3162,7 @@ module {
     };
   };
 
-  let op_8B_DUP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_8B_DUP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(11)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3181,7 +3182,7 @@ module {
     };
   };
 
-  let op_8C_DUP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_8C_DUP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(12)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3201,7 +3202,7 @@ module {
     };
   };
 
-  let op_8D_DUP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_8D_DUP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(13)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3221,7 +3222,7 @@ module {
     };
   };
 
-  let op_8E_DUP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_8E_DUP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(14)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3241,7 +3242,7 @@ module {
     };
   };
 
-  let op_8F_DUP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_8F_DUP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(15)) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -3261,7 +3262,7 @@ module {
     };
   };
 
-  let op_90_SWAP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_90_SWAP1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3291,7 +3292,7 @@ module {
     };
   };
 
-  let op_91_SWAP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_91_SWAP2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3321,7 +3322,7 @@ module {
     };
   };
 
-  let op_92_SWAP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_92_SWAP3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3351,7 +3352,7 @@ module {
     };
   };
 
-  let op_93_SWAP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_93_SWAP4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3381,7 +3382,7 @@ module {
     };
   };
 
-  let op_94_SWAP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_94_SWAP5 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3411,7 +3412,7 @@ module {
     };
   };
 
-  let op_95_SWAP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_95_SWAP6 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3441,7 +3442,7 @@ module {
     };
   };
 
-  let op_96_SWAP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_96_SWAP7 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3471,7 +3472,7 @@ module {
     };
   };
 
-  let op_97_SWAP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_97_SWAP8 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3501,7 +3502,7 @@ module {
     };
   };
 
-  let op_98_SWAP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_98_SWAP9 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3531,7 +3532,7 @@ module {
     };
   };
 
-  let op_99_SWAP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_99_SWAP10 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3561,7 +3562,7 @@ module {
     };
   };
 
-  let op_9A_SWAP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_9A_SWAP11 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3591,7 +3592,7 @@ module {
     };
   };
 
-  let op_9B_SWAP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_9B_SWAP12 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3621,7 +3622,7 @@ module {
     };
   };
 
-  let op_9C_SWAP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_9C_SWAP13 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3651,7 +3652,7 @@ module {
     };
   };
 
-  let op_9D_SWAP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_9D_SWAP14 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3681,7 +3682,7 @@ module {
     };
   };
 
-  let op_9E_SWAP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_9E_SWAP15 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3711,7 +3712,7 @@ module {
     };
   };
 
-  let op_9F_SWAP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_9F_SWAP16 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.peek(0)) {
       case (#err(e)) { return #err(e) };
       case (#ok(a)) {
@@ -3744,7 +3745,7 @@ module {
 
   // Logging Operations
 
-  let op_A0_LOG0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_A0_LOG0 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -3791,7 +3792,7 @@ module {
     };
   };
 
-  let op_A1_LOG1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_A1_LOG1 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -3848,7 +3849,7 @@ module {
     };
   };
 
-  let op_A2_LOG2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_A2_LOG2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -3915,7 +3916,7 @@ module {
     };
   };
 
-  let op_A3_LOG3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_A3_LOG3 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -3992,7 +3993,7 @@ module {
     };
   };
 
-  let op_A4_LOG4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_A4_LOG4 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(offset)) {
@@ -4083,14 +4084,14 @@ module {
   // Execution and System Operations
   // TODO - Test RETURNDATASIZE & RETURNDATACOPY
   
-  let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     exVar.programCounter := Array.size(exCon.code);
     return #ok(exVar);
   };
 
-  let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F1_CALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_F1_CALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(gas_)) {
@@ -4190,7 +4191,8 @@ module {
                                     address,
                                     calldata,
                                     exCon,
-                                    exVar
+                                    exVar,
+                                    engineInstance
                                   )) {
                                     case (#err(e)) {
                                       Debug.print("Subcontext reverted");
@@ -4272,9 +4274,9 @@ module {
     };
   };
 
-  let op_F2_CALLCODE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F2_CALLCODE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F3_RETURN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_F3_RETURN = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     exVar.programCounter := Array.size(exCon.code);
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
@@ -4315,17 +4317,17 @@ module {
     };
   };
 
-  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F4_DELEGATECALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_F5_CREATE2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F5_CREATE2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FA_STATICCALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FA_STATICCALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FB_TXHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FB_TXHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FC_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FC_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_FD_REVERT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_FD_REVERT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     exVar.programCounter := Array.size(exCon.code);
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
@@ -4376,137 +4378,137 @@ module {
     };
   };
 
-  let op_FE_INVALID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> {
+  let op_FE_INVALID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     return #err("Designated INVALID opcode called");
   };
 
-  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Other
 
-  let op_20_KECCAK256 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_20_KECCAK256 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_49_BLOBHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_49_BLOBHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5C_TLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_5C_TLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5D_TSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_5D_TSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_5E_MCOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_5E_MCOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Unused
-  let op_0C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_0D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_0E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_0F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_1E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_1F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_21_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_22_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_23_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_24_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_25_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_26_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_27_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_28_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_29_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_2A_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_2B_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_2C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_2D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_2E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_2F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_4B_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_4C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_4D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_4E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_4F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_A5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_A6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_A7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_A8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_A9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_AA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_AB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_AC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_AD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_AE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_AF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_B9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_BA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_BB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_BC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_BD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_BE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_BF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_C9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_CA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_CB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_CC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_CD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_CE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_CF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_D9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_DA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_DB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_DC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_DD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_DE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_DF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_E9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_EA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_EB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_EC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_ED_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_EE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_EF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_F6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_F7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_F8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
-  let op_F9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_0F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_1F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_21_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_22_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_23_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_24_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_25_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_26_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_27_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_28_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_29_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2A_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2B_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_2F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4B_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4C_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4D_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4E_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_4F_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_A9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_AF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_B9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_BF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_C9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_CF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_D9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DD_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_DF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E0_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E1_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E2_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E3_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E4_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E5_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_E9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EA_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EB_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EC_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_ED_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EE_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_EF_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F6_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F7_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F8_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
+  let op_F9_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
-  let engine: Engine = [
+  public func engine(): T.Engine {[
     op_00_STOP, op_01_ADD, op_02_MUL, op_03_SUB, op_04_DIV,op_05_SDIV,
     op_06_MOD, op_07_SMOD, op_08_ADDMOD, op_09_MULMOD, op_0A_EXP,
     op_0B_SIGNEXTEND, op_0C_, op_0D_, op_0E_, op_0F_, op_10_LT, op_11_GT,
@@ -4550,4 +4552,5 @@ module {
     op_F5_CREATE2, op_F6_, op_F7_, op_F8_, op_F9_, op_FA_STATICCALL, op_FB_TXHASH,
     op_FC_CHAINID, op_FD_REVERT, op_FE_INVALID, op_FF_SELFDESTRUCT
   ];
+  };
 };
