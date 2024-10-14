@@ -4156,6 +4156,7 @@ module {
                 //   - call depth limit reached
                 // add `value` to new account balance
                 // add initialisation subcontext return data as new account code
+                // push to stack: the address of the deployed contract, 0 if the deployment failed
                 // do gas calculations
                 //   let memory_expansion_cost = new_memory_cost - memory_cost;
                 //   minimum_word_size = (size + 31) / 32
