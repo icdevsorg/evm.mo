@@ -4112,8 +4112,72 @@ module {
     return #ok(exVar);
   };
 
-  let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-  // if (exVar.staticCall > 0) { return #err("Disallowed opcode CREATE called within STATICCALL") };
+  let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    return #err(""); // remove once complete
+    /*
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(offset)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(size)) {
+                if (exVar.staticCall > 0) {
+                  return #err("Disallowed opcode CREATE called within STATICCALL")
+                };
+                let memory_byte_size = Vec.size(exVar.memory);
+                let memory_size_word = (memory_byte_size + 31) / 32;
+                let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                var new_memory_cost = memory_cost;
+                if (offset + size > memory_byte_size) {
+                  let new_memory_size_word = (offset + size + 31) / 32;
+                  let new_memory_byte_size = new_memory_size_word * 32;
+                  Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+                  new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                };
+                let dataBuffer = Buffer.Buffer<Nat8>(4);
+                if (size > 0) {
+                  for (pos in Iter.range(offset, offset + size - 1)) {
+                    dataBuffer.add(Vec.get(exVar.memory, pos));
+                  };
+                };
+                let initCode = Buffer.toArray<Nat8>(dataBuffer); // initialisation code
+                // execute a subcontext with the initialisation code
+                // persist state changes from subcontext
+                // calculate address of new account
+                //   address = keccak256(rlp([sender_address,sender_nonce]))[12:]
+                // check conditions under which deployment can fail
+                //   - contract already exists at address
+                //   - insufficient value to send
+                //   - subcontext reverted
+                //   - insufficient gas to execute the initialisation code
+                //   - call depth limit reached
+                // add `value` to new account balance
+                // add initialisation subcontext return data as new account code
+                // do gas calculations
+                //   let memory_expansion_cost = new_memory_cost - memory_cost;
+                //   minimum_word_size = (size + 31) / 32
+                //   init_code_cost = 2 * minimum_word_size
+                //   code_deposit_cost = 200 * deployed_code_size
+                //   deployment_code_execution_cost = cost of initialisation code
+                //   dynamic_gas = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
+                    let newGas: Int = exVar.totalGas - 32000 - dynamic_gas;
+                    if (newGas < 0) {
+                      return #err("Out of gas")
+                      } else {
+                      exVar.totalGas := Int.abs(newGas);
+                      return #ok(exVar);
+                    };
+              };
+            };
+          };
+        };
+      };
+    };
+    */
+  };
 
   let op_F1_CALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
