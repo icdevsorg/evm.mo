@@ -17,7 +17,7 @@ import Sha256 "mo:sha2/Sha256"; // see https://mops.one/sha2
 import MPTrie "mo:merkle-patricia-trie/Trie"; // see https://github.com/f0i/merkle-patricia-trie.mo
 import K "mo:merkle-patricia-trie/Key";
 import V "mo:merkle-patricia-trie/Value";
-import { encodeAccount; decodeAccount } "rlp"; // see https://github.com/relaxed04/rlp-motoko
+import { encodeAccount; decodeAccount; encodeAddressNonce } "rlp"; // see https://github.com/relaxed04/rlp-motoko
 import EVMStack "evmStack";
 import T "types";
 

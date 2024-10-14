@@ -105,4 +105,27 @@ module {
       };
     };
   };
+
+  public func encodeAddressNonce(address: Blob, nonce: Nat) : Blob {
+
+    let buffer = Buffer.Buffer<RLPTypes.Input>(2);
+
+    let addressIter = address.vals();
+    let input1: RLPTypes.Input = #Uint8Array(Buffer.fromIter<Nat8>(addressIter));
+
+    let input2: RLPTypes.Input = #number(nonce);
+
+    buffer.add(input1);
+    buffer.add(input2);
+
+    let encoded: RLPTypes.Uint8Array = switch(RLP.encode(#List(buffer))) {
+      case(#ok(val)) { val };
+      case(#err(_)) { 
+        Debug.trap("RLP encoding trapped");
+      };
+    };
+    let encodedArray = Buffer.toArray<Nat8>(encoded);
+    let encodedBlob = Blob.fromArray(encodedArray);
+    encodedBlob;
+  };
 }
