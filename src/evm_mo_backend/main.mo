@@ -4113,8 +4113,6 @@ module {
   };
 
   let op_F0_CREATE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
-    return #err(""); // remove once complete
-    /*
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
       case (#ok(value)) {
@@ -4127,6 +4125,7 @@ module {
                 if (exVar.staticCall > 0) {
                   return #err("Disallowed opcode CREATE called within STATICCALL")
                 };
+                // adjust memory size if necessary
                 let memory_byte_size = Vec.size(exVar.memory);
                 let memory_size_word = (memory_byte_size + 31) / 32;
                 let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
@@ -4137,47 +4136,131 @@ module {
                   Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
                   new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
                 };
+                // get initialisation code from memory
                 let dataBuffer = Buffer.Buffer<Nat8>(4);
                 if (size > 0) {
                   for (pos in Iter.range(offset, offset + size - 1)) {
                     dataBuffer.add(Vec.get(exVar.memory, pos));
                   };
                 };
-                let initCode = Buffer.toArray<Nat8>(dataBuffer); // initialisation code
-                // execute a subcontext with the initialisation code
-                // persist state changes from subcontext
+                let initCode = Buffer.toArray<Nat8>(dataBuffer);
+                // get caller balance and nonce
+                let callerAddress = exCon.caller;
+                let callerAccountData = Trie.get(exCon.accounts, key callerAddress, Blob.equal);
+                var callerBalance = 0;
+                var callerNonce = 0;
+                switch (callerAccountData) {
+                  case (null) {};
+                  case (?data) {
+                    let decodedData = decodeAccount(data);
+                    callerBalance := decodedData.1;
+                    callerNonce := decodedData.0;
+                  };
+                };
+                for (change in Vec.vals(exVar.balanceChanges)) {
+                  if (change.from == exCon.caller) {callerBalance -= change.amount;};
+                  if (change.to == exCon.caller) {callerBalance += change.amount;};
+                };
                 // calculate address of new account
                 //   address = keccak256(rlp([sender_address,sender_nonce]))[12:]
-                // check conditions under which deployment can fail
-                //   - contract already exists at address
-                //   - insufficient value to send
-                //   - subcontext reverted
-                //   - insufficient gas to execute the initialisation code
-                //   - call depth limit reached
-                // add `value` to new account balance
-                // add initialisation subcontext return data as new account code
+                let encodedBlob = encodeAddressNonce(callerAddress, callerNonce);
+                let hashedRLP = Sha256.fromBlob(#sha256, encodedBlob);
+                let addressArray = Array.subArray<Nat8>(Blob.toArray(hashedRLP), 12, 20);
+                let address = Blob.fromArray(addressArray);
+                // check if account already exists at address
+                var addressIsNew = true;
+                let newAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                switch (newAccountData) {
+                  case (null) {
+                    for (change in Vec.vals(exVar.balanceChanges)) {
+                      if (change.to == exCon.caller) { addressIsNew := false; };
+                    };
+                  };
+                  case (?data) {
+                    addressIsNew := false;
+                  };
+                };
+                // execute a subcontext with the initialisation code
+                var result = 1;
+                var gasUsed = 0;
+                let gas = exVar.totalGas * 63 / 64;
+                if (value <= callerBalance and addressIsNew) {
+                  switch (executeSubcontext(
+                    initCode,
+                    gas,
+                    value,
+                    address,
+                    "" : Blob, // calldata
+                    exCon,
+                    exVar,
+                    engineInstance
+                  )) {
+                    case (#err(e)) {
+                      Debug.print("Subcontext reverted");
+                      result := 0;
+                    };
+                    case (#ok(subcontext)) {
+                      // persist state changes from subcontext
+                      exVar.balanceChanges := subcontext.balanceChanges;
+                      exVar.storageChanges := subcontext.storageChanges;
+                      exVar.codeAdditions := subcontext.codeAdditions;
+                      exVar.codeStore := subcontext.codeStore;
+                      exVar.storageStore := subcontext.storageStore;
+                      // add initialisation subcontext return data as new account code
+                      switch (subcontext.returnData) {
+                        case (null) {};
+                        case (?data) {
+                          let code = Blob.toArray(data);
+                          let emptyCode = Array.init<Nat8>(0, 0);
+                          let codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                          let newCodeChange: T.CodeChange = {
+                            key = codeChangeKey;
+                            originalValue = [] : [T.OpCode];
+                            newValue = Option.make(code);
+                          };
+                          Map.set(exVar.codeAdditions, bhash, codeChangeKey, newCodeChange);
+                          Map.set(exVar.codeStore, bhash, getCodeHash(code), code);
+                        };
+                      };
+                      gasUsed := gas - subcontext.totalGas;
+                    };
+                  };
+                } else {
+                  result := 0;
+                };
                 // push to stack: the address of the deployed contract, 0 if the deployment failed
-                // do gas calculations
-                //   let memory_expansion_cost = new_memory_cost - memory_cost;
-                //   minimum_word_size = (size + 31) / 32
-                //   init_code_cost = 2 * minimum_word_size
-                //   code_deposit_cost = 200 * deployed_code_size
-                //   deployment_code_execution_cost = cost of initialisation code
-                //   dynamic_gas = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
+                if (result > 0) {
+                  var pos: Nat = 20;
+                  result := 0;
+                  for (byte: Nat8 in address.vals()) {
+                    pos -= 1;
+                    result += Nat8.toNat(byte) * (256 ** pos);
+                  };
+                };
+                switch (exVar.stack.push(result)) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(_)) {
+                    // calculate gas
+                    let memory_expansion_cost = new_memory_cost - memory_cost;
+                    let minimum_word_size = (size + 31) / 32;
+                    let init_code_cost = 2 * minimum_word_size;
+                    let code_deposit_cost = 200 * initCode.size();
+                    let dynamic_gas = init_code_cost + memory_expansion_cost + gasUsed + code_deposit_cost;
                     let newGas: Int = exVar.totalGas - 32000 - dynamic_gas;
                     if (newGas < 0) {
                       return #err("Out of gas")
-                      } else {
+                    } else {
                       exVar.totalGas := Int.abs(newGas);
                       return #ok(exVar);
                     };
+                  };
+                };
               };
             };
           };
         };
       };
     };
-    */
   };
 
   let op_F1_CALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
@@ -4268,8 +4351,8 @@ module {
                                   };
                                 };
                                 for (change in Vec.vals(exVar.balanceChanges)) {
-                                  if (change.from == exCon.caller) {callerBalance -= change.amount};
-                                  if (change.to == exCon.caller) {callerBalance += change.amount};
+                                  if (change.from == exCon.caller) {callerBalance -= change.amount;};
+                                  if (change.to == exCon.caller) {callerBalance += change.amount;};
                                 };
                                 // if value <= caller balance then run subcontext
                                 // otherwise the call fails but the current context is not reverted
@@ -4449,8 +4532,8 @@ module {
                                   };
                                 };
                                 for (change in Vec.vals(exVar.balanceChanges)) {
-                                  if (change.from == exCon.caller) {callerBalance -= change.amount};
-                                  if (change.to == exCon.caller) {callerBalance += change.amount};
+                                  if (change.from == exCon.caller) {callerBalance -= change.amount;};
+                                  if (change.to == exCon.caller) {callerBalance += change.amount;};
                                 };
                                 // if value <= caller balance then run subcontext
                                 // otherwise the call fails but the current context is not reverted
@@ -4670,8 +4753,8 @@ module {
                               };
                             };
                             for (change in Vec.vals(exVar.balanceChanges)) {
-                              if (change.from == exCon.caller) {callerBalance -= change.amount};
-                              if (change.to == exCon.caller) {callerBalance += change.amount};
+                              if (change.from == exCon.caller) {callerBalance -= change.amount;};
+                              if (change.to == exCon.caller) {callerBalance += change.amount;};
                             };
                             // if value <= caller balance then run subcontext
                             // otherwise the call fails but the current context is not reverted
@@ -4764,8 +4847,167 @@ module {
     };
   };
 
-  let op_F5_CREATE2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-  // if (exVar.staticCall > 0) { return #err("Disallowed opcode CREATE2 called within STATICCALL") };
+  let op_F5_CREATE2 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(value)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(offset)) {
+            switch (exVar.stack.pop()) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(size)) {
+                switch (exVar.stack.pop()) {
+                  case (#err(e)) { return #err(e) };
+                  case (#ok(salt)) {
+                    if (exVar.staticCall > 0) {
+                      return #err("Disallowed opcode CREATE2 called within STATICCALL")
+                    };
+                    // adjust memory size if necessary
+                    let memory_byte_size = Vec.size(exVar.memory);
+                    let memory_size_word = (memory_byte_size + 31) / 32;
+                    let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+                    var new_memory_cost = memory_cost;
+                    if (offset + size > memory_byte_size) {
+                      let new_memory_size_word = (offset + size + 31) / 32;
+                      let new_memory_byte_size = new_memory_size_word * 32;
+                      Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+                      new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+                    };
+                    // get initialisation code from memory
+                    let dataBuffer = Buffer.Buffer<Nat8>(4);
+                    if (size > 0) {
+                      for (pos in Iter.range(offset, offset + size - 1)) {
+                        dataBuffer.add(Vec.get(exVar.memory, pos));
+                      };
+                    };
+                    let initCode = Buffer.toArray<Nat8>(dataBuffer);
+                    // get caller balance and nonce
+                    let callerAddress = exCon.caller;
+                    let callerAccountData = Trie.get(exCon.accounts, key callerAddress, Blob.equal);
+                    var callerBalance = 0;
+                    var callerNonce = 0;
+                    switch (callerAccountData) {
+                      case (null) {};
+                      case (?data) {
+                        let decodedData = decodeAccount(data);
+                        callerBalance := decodedData.1;
+                        callerNonce := decodedData.0;
+                      };
+                    };
+                    for (change in Vec.vals(exVar.balanceChanges)) {
+                      if (change.from == exCon.caller) {callerBalance -= change.amount;};
+                      if (change.to == exCon.caller) {callerBalance += change.amount;};
+                    };
+                    // calculate address of new account
+                    //   address = keccak256(0xff + sender_address + salt + keccak256(initialisation_code))[12:]
+                    let saltBuffer = Buffer.Buffer<Nat8>(32);
+                    for (i in Iter.revRange(31, 0)) {
+                      saltBuffer.add(Nat8.fromNat((salt % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+                    };
+                    let saltArray = Buffer.toArray<Nat8>(saltBuffer);
+                    let array1 = Array.append<Nat8>([0xff] : [Nat8], Blob.toArray(exCon.caller));
+                    let array2 = Array.append<Nat8>(array1, saltArray);
+                    let array3 = Array.append<Nat8>(array2, Blob.toArray(getCodeHash(initCode)));
+                    let addressArray = Array.subArray<Nat8>(array3, 12, 20);
+                    let address = Blob.fromArray(addressArray);
+                    // check if account already exists at address
+                    var addressIsNew = true;
+                    let newAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                    switch (newAccountData) {
+                      case (null) {
+                        for (change in Vec.vals(exVar.balanceChanges)) {
+                          if (change.to == exCon.caller) { addressIsNew := false; };
+                        };
+                      };
+                      case (?data) {
+                        addressIsNew := false;
+                      };
+                    };
+                    // execute a subcontext with the initialisation code
+                    var result = 1;
+                    var gasUsed = 0;
+                    let gas = exVar.totalGas * 63 / 64;
+                    if (value <= callerBalance and addressIsNew) {
+                      switch (executeSubcontext(
+                        initCode,
+                        gas,
+                        value,
+                        address,
+                        "" : Blob, // calldata
+                        exCon,
+                        exVar,
+                        engineInstance
+                      )) {
+                        case (#err(e)) {
+                          Debug.print("Subcontext reverted");
+                          result := 0;
+                        };
+                        case (#ok(subcontext)) {
+                          // persist state changes from subcontext
+                          exVar.balanceChanges := subcontext.balanceChanges;
+                          exVar.storageChanges := subcontext.storageChanges;
+                          exVar.codeAdditions := subcontext.codeAdditions;
+                          exVar.codeStore := subcontext.codeStore;
+                          exVar.storageStore := subcontext.storageStore;
+                          // add initialisation subcontext return data as new account code
+                          switch (subcontext.returnData) {
+                            case (null) {};
+                            case (?data) {
+                              let code = Blob.toArray(data);
+                              let emptyCode = Array.init<Nat8>(0, 0);
+                              let codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                              let newCodeChange: T.CodeChange = {
+                                key = codeChangeKey;
+                                originalValue = [] : [T.OpCode];
+                                newValue = Option.make(code);
+                              };
+                              Map.set(exVar.codeAdditions, bhash, codeChangeKey, newCodeChange);
+                              Map.set(exVar.codeStore, bhash, getCodeHash(code), code);
+                            };
+                          };
+                          gasUsed := gas - subcontext.totalGas;
+                        };
+                      };
+                    } else {
+                      result := 0;
+                    };
+                    // push to stack: the address of the deployed contract, 0 if the deployment failed
+                    if (result > 0) {
+                      var pos: Nat = 20;
+                      result := 0;
+                      for (byte: Nat8 in address.vals()) {
+                        pos -= 1;
+                        result += Nat8.toNat(byte) * (256 ** pos);
+                      };
+                    };
+                    switch (exVar.stack.push(result)) {
+                      case (#err(e)) { return #err(e) };
+                      case (#ok(_)) {
+                        // calculate gas
+                        let memory_expansion_cost = new_memory_cost - memory_cost;
+                        let minimum_word_size = (size + 31) / 32;
+                        let init_code_cost = 2 * minimum_word_size;
+                        let code_deposit_cost = 200 * initCode.size();
+                        let dynamic_gas = init_code_cost + memory_expansion_cost + gasUsed + code_deposit_cost;
+                        let newGas: Int = exVar.totalGas - 32000 - dynamic_gas;
+                        if (newGas < 0) {
+                          return #err("Out of gas")
+                        } else {
+                          exVar.totalGas := Int.abs(newGas);
+                          return #ok(exVar);
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
 
   let op_FA_STATICCALL = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
@@ -4922,8 +5164,10 @@ module {
     };
   };
 
+  // Not in use
   let op_FB_TXHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
+  // Not in use
   let op_FC_CHAINID = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
   let op_FD_REVERT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
@@ -4981,8 +5225,122 @@ module {
     return #err("Designated INVALID opcode called");
   };
 
-  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-  // if (exVar.staticCall > 0) { return #err("Disallowed opcode SELFDESTRUCT called within STATICCALL") };
+  // TODO - This function sends the caller's full balance and removes code. More might be needed depending
+  //  on how accounts are updated at the end of the state transition. Nonce and gas refund are not yet
+  //  accounted for.
+  let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(addressNat)) {
+        if (exVar.staticCall > 0) {
+          return #err("Disallowed opcode SELFDESTRUCT called within STATICCALL")
+        };
+        let addressBuffer = Buffer.Buffer<Nat8>(20);
+        for (i in Iter.revRange(19, 0)) {
+          addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+        // get caller balance
+        let callerAddress = exCon.caller;
+        let callerAccountData = Trie.get(exCon.accounts, key callerAddress, Blob.equal);
+        var callerBalance = 0;
+        switch (callerAccountData) {
+          case (null) {};
+          case (?data) {
+            let decodedData = decodeAccount(data);
+            callerBalance := decodedData.1;
+          };
+        };
+        for (change in Vec.vals(exVar.balanceChanges)) {
+          if (change.from == exCon.caller) {callerBalance -= change.amount;};
+          if (change.to == exCon.caller) {callerBalance += change.amount;};
+        };
+        // get recipient balance, nonce and codeHash
+        let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
+        var balance = 0;
+        var nonce = 0;
+        let emptyCode = [] : [T.OpCode];
+        var codeHash = getCodeHash(emptyCode);
+        switch (accountData) {
+          case (null) {};
+          case (?data) {
+            let decodedData = decodeAccount(data);
+            balance := decodedData.1;
+            nonce := decodedData.0;
+            codeHash := decodedData.3;
+          };
+        };
+        for (change in Vec.vals(exVar.balanceChanges)) {
+          if (change.from == address) {balance -= change.amount};
+          if (change.to == address) {balance += change.amount};
+        };
+        var accountIsEmpty = false;
+        if (balance == 0 and nonce == 0 and Blob.equal(codeHash, getCodeHash(emptyCode))) {
+          accountIsEmpty := true;
+        };
+        // send full balance
+        Vec.add(exVar.balanceChanges, {
+          from = callerAddress;
+          to = address;
+          amount = callerBalance;
+        });
+        // get caller code
+        let callerData = Trie.get(exCon.accounts, key address, Blob.equal);
+        var callerCode = Array.init<Nat8>(0, 0);
+        var callerCodeHash = "" : Blob;
+        switch (callerData) {
+          case (null) {};
+          case (?data) {
+            let decodedData = decodeAccount(data);
+            callerCodeHash := decodedData.3;
+            let code = Map.get(exVar.codeStore, bhash, callerCodeHash);
+            switch (code) {
+              case (null) {};
+              case (?code_) {
+                callerCode := Array.thaw<Nat8>(code_);
+              };
+            };
+          };
+        };
+        // check for any code changes during the current execution
+        var codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(callerCode)));
+        for (change in Map.entries(exVar.codeAdditions)) {
+          if (change.0 == codeChangeKey) {
+            switch (change.1.newValue) {
+              case (null) {
+                callerCode := Array.init<Nat8>(0, 0);
+              };
+              case (?newCode) {
+                callerCode := Array.thaw<Nat8>(newCode);
+                codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), newCode));
+              };
+            };
+          };
+        };
+        // remove caller code
+        let newCodeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(callerCode)));
+        let newCodeChange: T.CodeChange = {
+          key = newCodeChangeKey;
+          originalValue = Array.freeze<Nat8>(callerCode);
+          newValue = Option.make([] : [T.OpCode]);
+        };
+        Map.set(exVar.codeAdditions, bhash, newCodeChangeKey, newCodeChange);
+        Map.set(exVar.codeStore, bhash, getCodeHash([] : [T.OpCode]), [] : [T.OpCode]);
+        // calculate gas
+        var dynamicGas = 0;
+        if (accountIsEmpty) {
+          dynamicGas := 25000;
+        };
+        let newGas: Int = exVar.totalGas - 5000 - dynamicGas; // warm/cold address distinction not in this version
+        if (newGas < 0) {
+          return #err("Out of gas")
+          } else {
+          exVar.totalGas := Int.abs(newGas);
+          return #ok(exVar);
+        };
+      };
+    };
+  };
 
 
   // Other
