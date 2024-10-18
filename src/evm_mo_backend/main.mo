@@ -76,7 +76,7 @@ module {
       to = tx.callee;
       amount = tx.incomingEth;
     });
-    // If the receiving account does not yet exist, create it. => TODO
+    // If the receiving account does not yet exist, create it => implemented above
 
     let exCon: T.ExecutionContext = {
       origin = tx.caller;
@@ -307,7 +307,9 @@ module {
       });
     };
 
-    // TODO - Iterate through and apply balance changes to exCon.accounts and add new accounts.
+    // TODO - Iterate through balance, code and storage accounts. Apply changes to existing accounts. Add
+    //  new accounts where necessary. Account for nonce changes. Detect accounts that have executed
+    //  SELFDESTRUCT, as per the comments for the op_FF_SELFDESTRUCT function.
 
     let newExCon: T.ExecutionContext = {
       origin = exCon.origin;
@@ -5225,9 +5227,12 @@ module {
     return #err("Designated INVALID opcode called");
   };
 
-  // TODO - This function sends the caller's full balance and removes code. More might be needed depending
-  //  on how accounts are updated at the end of the state transition. Nonce and gas refund are not yet
-  //  accounted for.
+  // TODO - This function sends the caller's full balance and removes code. When the accounts trie is
+  //  updated at the end of the state transition, if it fits criteria showing that it was added anew in
+  //  the current transaction (i.e. not already in the accounts trie) and has an additional code change
+  //  to empty code. This will enable compliance with the current stipulation that the account is removed
+  //  only if SELFDESTRUCT is executed in the same transaction in which a contract was created. Gas refund
+  //  might still need to be accounted for.
   let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
