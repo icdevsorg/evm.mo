@@ -49,8 +49,22 @@ module {
     let codeStore = Map.new<Blob, [T.OpCode]>();
     Map.set(codeStore, bhash, getCodeHash(callerState.code), callerState.code);
     Map.set(codeStore, bhash, getCodeHash(calleeState.code), calleeState.code);
-    // TODO? - Add storageRoot to storageStore for each account
-    // TODO - Add origin and coinbase to accounts
+    // Add coinbase to accounts. In production, would be derived from the accounts Trie.
+    let encodedCoinbaseState = encodeAccount(1, 0, getStorageRoot(Trie.empty()), getCodeHash([]));
+    let accounts3 = Trie.put(accounts2, key(blockInfo.blockCoinbase), Blob.equal, encodedCoinbaseState).0;
+    Map.set(codeStore, bhash, getCodeHash([]), []);
+    // Add storageRoot to storageStore for caller and callee accounts
+    let storageStore = Vec.new<(Blob, Blob)>();
+    for ((k, v) in Trie.iter(callerState.storage)) {
+      let storageChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(tx.caller), Blob.toArray(k)));
+      Vec.add(storageStore, (tx.caller, storageChangeKey));
+    };
+    for ((k, v) in Trie.iter(calleeState.storage)) {
+      let storageChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(tx.callee), Blob.toArray(k)));
+      Vec.add(storageStore, (tx.callee, storageChangeKey));
+    };
+    // TODO - Note that the code above does not account for other pre-existing storage or code within accounts
+
     // Check Transaction has right number of values => will trap if not
     // Check signature is valid => not applicable for this version
     // Check that nonce matches nonce in sender's account => TODO
@@ -95,8 +109,8 @@ module {
       codeAdditions = []; 
       blockHashes = blockHashes; 
       codeStore = Map.toArray<Blob, [T.OpCode]>(codeStore); 
-      storageStore = [];
-      accounts = accounts2; 
+      storageStore = Vec.toArray<(Blob, Blob)>(storageStore);
+      accounts = accounts3; 
       logs = []; 
       totalGas = tx.gasLimitTx;
       gasRefund = 0;
@@ -121,7 +135,7 @@ module {
       var storageChanges = Map.new<Blob, T.StorageSlotChange>();
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
       var codeStore = codeStore;//Map.new<Blob, [T.OpCode]>(); 
-      var storageStore = Vec.new<(Blob, Blob)>();
+      var storageStore = storageStore;
       var logs = Vec.new<T.LogEntry>();
       var totalGas = tx.gasLimitTx;
       var gasRefund = 0;
@@ -184,7 +198,7 @@ module {
       stack = [];
       memory = [];
       contractStorage = contractStorage; 
-      caller = callerExCon.caller;
+      caller = callerExCon.callee;
       callee = callee;
       currentGas = gas;
       gasPrice = callerExCon.gasPrice;
@@ -307,9 +321,118 @@ module {
       });
     };
 
-    // TODO - Iterate through balance, code and storage accounts. Apply changes to existing accounts. Add
-    //  new accounts where necessary. Account for nonce changes. Detect accounts that have executed
-    //  SELFDESTRUCT, as per the comments for the op_FF_SELFDESTRUCT function.
+    // Iterate through balance, code and storage changes, apply changes to existing accounts and add
+    //  new accounts where necessary. 
+    // TODO - Account for nonce changes.
+    // TODO - Detect accounts that have executed SELFDESTRUCT, as per the comments for the 
+    //  op_FF_SELFDESTRUCT function.
+    // If an account fits criteria showing that it was added anew in
+    //  the current transaction (i.e. not already in the accounts trie) and has an additional code change
+    //  to empty code then it will not be included in the updated accounts trie.
+    var updatedAccounts = exCon.accounts;
+
+    // Update balances
+    for (element in Vec.vals(exVar.balanceChanges)) {
+      let fromAccount = element.from;
+      let toAccount = element.to;
+      let amount = element.amount;
+      let fromAccountData = Trie.get(updatedAccounts, key fromAccount, Blob.equal);
+      switch (fromAccountData) {
+        case (null) {
+          Debug.print("Invalid 'from' account included in exVar.balanceChanges."); // This should not happen
+          Debug.print(debug_show(element));
+          return (exCon, revert(exCon));
+        };
+        case (?data) {
+          let decodedData = decodeAccount(data);
+          let newBalance = decodedData.1 - amount;
+          let updatedEncodedData = encodeAccount(decodedData.0, newBalance, decodedData.2, decodedData.3);
+          updatedAccounts := Trie.put(updatedAccounts, key(fromAccount), Blob.equal, updatedEncodedData).0;
+        };
+      };
+      let toAccountData = Trie.get(updatedAccounts, key toAccount, Blob.equal);
+      switch (toAccountData) {
+        case (null) { // add new account
+          let encodedData = encodeAccount(0, amount, getStorageRoot(Trie.empty()), getCodeHash([]));
+          updatedAccounts := Trie.put(updatedAccounts, key(toAccount), Blob.equal, encodedData).0;
+        };
+        case (?data) {
+          let decodedData = decodeAccount(data);
+          let newBalance = decodedData.1 + amount;
+          let updatedEncodedData = encodeAccount(decodedData.0, newBalance, decodedData.2, decodedData.3);
+          updatedAccounts := Trie.put(updatedAccounts, key(toAccount), Blob.equal, updatedEncodedData).0;
+        };
+      };
+    };
+
+    // Update code and storage
+    let accountsIter = Trie.iter(updatedAccounts);
+    for ((address, accountData) in accountsIter) {
+      var decodedData = decodeAccount(accountData);
+      // getCodeHash(address + starting code) will be the first key
+      let emptyCode = Array.init<Nat8>(0, 0);
+      var codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+      // if address is in exCon.accounts then starting code is from there
+      let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+      switch (startingAccountData) {
+        case (null) {}; // new account, so starting code is emptyCode
+        case (?data) {
+          let decodedStartingData = decodeAccount(data);
+          let startingCode = decodedStartingData.3;
+          codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Blob.toArray(startingCode)));
+        };
+      };
+
+      // Iterate through exVar.codeAdditions and make changes
+      for (change in Map.entries(exVar.codeAdditions)) {
+        var newCode = emptyCode;
+        if (change.0 == codeChangeKey) {
+          switch (change.1.newValue) {
+            case (null) {
+              codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+            };
+            case (?code) {
+              newCode := Array.thaw<Nat8>(code);
+              codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(newCode)));
+            };
+          };
+          let updatedEncodedData_ = encodeAccount(decodedData.0, decodedData.1, decodedData.2, getCodeHash(Array.freeze<Nat8>(newCode)));
+          updatedAccounts := Trie.put(updatedAccounts, key(address), Blob.equal, updatedEncodedData_).0;
+        };
+      };
+      
+      // Iterate through exVar.storageStore and make changes
+      var contractStorage : T.Storage = Trie.empty();
+      for (element in Vec.vals(exVar.storageStore)) {
+        if (element.0 == address) {
+          let storageChangeKey = element.1;
+          let storageSlotChange = Map.get(exVar.storageChanges, bhash, storageChangeKey);
+          switch (storageSlotChange) {
+            case (null) {};
+            case (?slotChange) {
+              let key_ = slotChange.key;
+              let value = slotChange.newValue;
+              switch (value) {
+                case (null) {
+                  contractStorage := Trie.put(contractStorage, key(key_), Blob.equal, [] : [Nat8]).0;
+                };
+                case (?val) {
+                  contractStorage := Trie.put(contractStorage, key(key_), Blob.equal, val).0
+                };
+              };
+            };
+          };
+        };
+      };
+      switch (Trie.get(updatedAccounts, key address, Blob.equal)) {
+        case (null) {};
+        case (?newData) {
+          let newDecodedData = decodeAccount(newData);
+          let updatedEncodedData = encodeAccount(newDecodedData.0, newDecodedData.1, getStorageRoot(contractStorage), newDecodedData.3);
+          updatedAccounts := Trie.put(updatedAccounts, key(address), Blob.equal, updatedEncodedData).0;
+        };
+      };
+    };
 
     let newExCon: T.ExecutionContext = {
       origin = exCon.origin;
@@ -329,7 +452,7 @@ module {
       blockHashes = exCon.blockHashes; 
       codeStore = Map.toArray<Blob, [T.OpCode]>(exVar.codeStore); 
       storageStore = Vec.toArray<(Blob, Blob)>(exVar.storageStore);
-      accounts = exCon.accounts; 
+      accounts = updatedAccounts; 
       logs = Vec.toArray<T.LogEntry>(exVar.logs); 
       totalGas = exVar.totalGas;
       gasRefund = exVar.gasRefund;
@@ -4546,7 +4669,7 @@ module {
                                     code,
                                     gas,
                                     value,
-                                    exCon.caller, // uses own address
+                                    exCon.callee, // uses own address
                                     calldata,
                                     exCon,
                                     exVar,
@@ -4767,7 +4890,7 @@ module {
                                 code,
                                 gas,
                                 value,
-                                exCon.caller, // uses own address
+                                exCon.callee, // uses own address
                                 calldata,
                                 exCon,
                                 exVar,
@@ -5230,9 +5353,9 @@ module {
   // TODO - This function sends the caller's full balance and removes code. When the accounts trie is
   //  updated at the end of the state transition, if it fits criteria showing that it was added anew in
   //  the current transaction (i.e. not already in the accounts trie) and has an additional code change
-  //  to empty code. This will enable compliance with the current stipulation that the account is removed
-  //  only if SELFDESTRUCT is executed in the same transaction in which a contract was created. Gas refund
-  //  might still need to be accounted for.
+  //  to empty code then it will not be included in the updated accounts trie. This will enable compliance
+  //  with the current stipulation that the account is removed only if SELFDESTRUCT is executed in the
+  //  same transaction in which a contract was created. Gas refund might still need to be accounted for.
   let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
