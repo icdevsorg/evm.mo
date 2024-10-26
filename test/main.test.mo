@@ -6,13 +6,20 @@ import Array "mo:base/Array";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
+import Blob "mo:base/Blob";
+import Buffer "mo:base/Buffer";
 import Int "mo:base/Int";
 import Trie "mo:base/Trie";
+import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 import Vec "mo:vector";
 import Map "mo:map/Map";
 import EVMStack "../src/evm_mo_backend/evmStack";
 import T "../src/evm_mo_backend/types";
+import { decodeAccount } "../src/evm_mo_backend/rlp";
+
+type Key<K> = Trie.Key<K>;
+func key(n: Blob) : Key<Blob> { { hash = Blob.hash(n); key = n } };
 
 let dummyTransaction: T.Transaction = {
     caller = "\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa";
@@ -60,6 +67,7 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     );
     context;
 };
+
 
 // Basic Math and Bitwise Logic
 
@@ -1447,3 +1455,125 @@ await test("LOG4", func() : async () {
         data = "\04\05\06\07\08\09\0a\0b\0c\0d\0e\0f\10\11\12\13" : Blob
     });
 });
+
+// Execution and System Operations
+
+Debug.print(">");
+Debug.print(">");
+Debug.print(">  Execution and System Operations");
+Debug.print(">");
+Debug.print(">");
+
+// 00 STOP
+await test("STOP", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 2,  // PUSH1 2
+        0x60, 1,   // PUSH1 1
+        0x01,      // ADD
+        0x00,      // STOP
+        0x60, 5,   // PUSH1 5
+        0x01]      // ADD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    assert(result == [3]);
+});
+
+// F0 CREATE
+await test("CREATE: value = 9, no code", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 0,  // PUSH1 0
+        0x60, 0,   // PUSH1 0
+        0x60, 9,   // PUSH1 9
+        0xf0]      // CREATE
+    );
+    let result = context.stack;
+    let addressBuffer = Buffer.Buffer<Nat8>(20);
+    for (i in Iter.revRange(19, 0)) {
+      addressBuffer.add(Nat8.fromNat((result[0] % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+    };
+    let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+    var code = [] : [T.OpCode];
+    var balance = 0;
+    let accountData = Trie.get(context.accounts, key address, Blob.equal);
+    switch (accountData) {
+      case (null) {};
+      case (?data) {
+        let decodedData = decodeAccount(data);
+        balance := decodedData.1;
+        let codeHash = decodedData.3;
+        for (val in context.codeStore.vals()) {
+          if (val.0 == codeHash){ code := val.1 };
+        };
+      };
+    };
+    Debug.print(debug_show("Address:", address));
+    Debug.print(debug_show("Balance:", balance));
+    Debug.print(debug_show("Code:", code));
+    assert(result[0] > 0);
+});
+
+await test("CREATE: value = 0, code = FFFFFFFF", func() : async () {
+    let context = await testOpCodes(
+        [0x6c,                        // PUSH13
+        0x63, 0xff, 0xff, 0xff, 0xff, // 0x63FFFFFFFF6000526004601CF3
+        0x60, 0x00, 0x52, 0x60, 0x04,
+        0x60, 0x1c, 0xf3,
+        0x60, 0,                      // PUSH1 0
+        0x52,                         // MSTORE
+        0x60, 13,                     // PUSH1 13
+        0x60, 19,                     // PUSH1 19
+        0x60, 0,                      // PUSH1 0
+        0xf0]                         // CREATE
+    );
+    let result = context.stack;
+    let addressBuffer = Buffer.Buffer<Nat8>(20);
+    for (i in Iter.revRange(19, 0)) {
+      addressBuffer.add(Nat8.fromNat((result[0] % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+    };
+    let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+    var code = [] : [T.OpCode];
+    var balance = 0;
+    let accountData = Trie.get(context.accounts, key address, Blob.equal);
+    switch (accountData) {
+      case (null) {};
+      case (?data) {
+        let decodedData = decodeAccount(data);
+        balance := decodedData.1;
+        let codeHash = decodedData.3;
+        for (val in context.codeStore.vals()) {
+          if (val.0 == codeHash){ code := val.1 };
+        };
+      };
+    };
+    Debug.print(debug_show("Address:", address));
+    Debug.print(debug_show("Balance:", balance));
+    Debug.print(debug_show("Code:", code));
+    assert(result[0] > 0);
+});
+
+// F1 CALL
+
+
+// F2 CALLCODE
+
+
+// F3 RETURN
+
+
+// F4 DELEGATECALL
+
+
+// F5 CREATE2
+
+
+// FA STATICCALL
+
+
+// FD REVERT
+
+
+// FE INVALID
+
+
+// FF SELFDESTRUCT
