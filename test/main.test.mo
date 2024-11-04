@@ -1510,7 +1510,7 @@ await test("CREATE: value = 9, no code", func() : async () {
     Debug.print(debug_show("Address:", address));
     Debug.print(debug_show("Balance:", balance));
     Debug.print(debug_show("Code:", code));
-    assert(result[0] > 0);
+    assert(result[0] > 0 and balance == 9 and Array.equal(code, [], Nat8.equal));
 });
 
 await test("CREATE: value = 0, code = FFFFFFFF", func() : async () {
@@ -1549,26 +1549,435 @@ await test("CREATE: value = 0, code = FFFFFFFF", func() : async () {
     Debug.print(debug_show("Address:", address));
     Debug.print(debug_show("Balance:", balance));
     Debug.print(debug_show("Code:", code));
-    assert(result[0] > 0);
+    assert(result[0] > 0 and balance == 0 and Array.equal(code, [255, 255, 255, 255] : [Nat8], Nat8.equal));
 });
 
 // F1 CALL
 
+await test("CALL: return 0xabcd", func() : async () {
+    let context = await testOpCodes(
+        [0x77, //     PUSH24
+        //            [
+        0x6e, //        PUSH15
+        //              [
+        0x60, 0xab, //    PUSH1 0xAB
+        0x60, 0, //       PUSH1 0
+        0x53, //          MSTORE8
+        0x60, 0xcd, //    PUSH1 0xCD
+        0x60, 1, //       PUSH1 1
+        0x53, //          MSTORE8
+        0x60, 2, //       PUSH1 2
+        0x60, 0, //       PUSH1 0
+        0xf3, //          RETURN
+        //              ] // returns 0xabcd
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 15, //    PUSH1 15
+        0x60, 17, //    PUSH1 17
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 24, //  PUSH1 24 // size
+        0x60, 8, //   PUSH1 8 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 2, //   PUSH1 2 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6 // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf1] //      CALL
+    );
+    let result = context.stack[1];
+    let memory = context.memory;
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Memory:", memory));
+    assert(result == 1 and memory[0] == 0xab and memory[1] == 0xcd);
+});
+
+await test("CALL: return value from storage slot 0", func() : async () {
+    let context = await testOpCodes(
+        [0x73, //     PUSH20
+        //            [
+        0x6a, //        PUSH11
+        //              [
+        0x60, 0, //       PUSH1 0
+        0x54, //          SLOAD
+        0x60, 0, //       PUSH1 0
+        0x52, //          MSTORE
+        0x60, 32, //      PUSH1 32
+        0x60, 0, //       PUSH1 0
+        0xf3, //          RETURN
+        //              ] // returns value from storage slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 11, //    PUSH1 11
+        0x60, 21, //    PUSH1 21
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 20, //  PUSH1 20 // size
+        0x60, 12, //  PUSH1 12 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 42, //  PUSH1 42
+        0x60, 0, //   PUSH1 0
+        0x55, //      SSTORE
+        0x60, 32, //  PUSH1 32 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf1] //      CALL
+    );
+    let result = context.stack[1];
+    let memory = context.memory;
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Memory:", memory));
+    assert(result == 1 and memory[31] == 0);
+});
+
+await test("CALL: store 42 in slot 0", func() : async () {
+    let context = await testOpCodes(
+        [0x6d, //     PUSH14
+        //            [
+        0x64, //        PUSH5
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 5, //     PUSH1 5
+        0x60, 27, //    PUSH1 27
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 14, //  PUSH1 14 // size
+        0x60, 18, //  PUSH1 18 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf1] //      CALL
+    );
+    let result = context.stack[1];
+    let storage = context.contractStorage;
+    let key0 : Blob = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00";
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Storage:", storage));
+    assert(result == 1 and Trie.get(storage, key key0, Blob.equal) == null);
+});
 
 // F2 CALLCODE
+await test("CALLCODE: return value from storage slot 0", func() : async () {
+    let context = await testOpCodes(
+        [0x73, //     PUSH20
+        //            [
+        0x6a, //        PUSH11
+        //              [
+        0x60, 0, //       PUSH1 0
+        0x54, //          SLOAD
+        0x60, 0, //       PUSH1 0
+        0x52, //          MSTORE
+        0x60, 32, //      PUSH1 32
+        0x60, 0, //       PUSH1 0
+        0xf3, //          RETURN
+        //              ] // returns value from storage slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 11, //    PUSH1 11
+        0x60, 21, //    PUSH1 21
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 20, //  PUSH1 20 // size
+        0x60, 12, //  PUSH1 12 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 42, //  PUSH1 42
+        0x60, 0, //   PUSH1 0
+        0x55, //      SSTORE
+        0x60, 32, //  PUSH1 32 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf2] //      CALLCODE
+    );
+    let result = context.stack[1];
+    let memory = context.memory;
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Memory:", memory));
+    assert(result == 1 and memory[31] == 42);
+});
 
+await test("CALLCODE: store 42 in slot 0", func() : async () {
+    let context = await testOpCodes(
+        [0x6d, //     PUSH14
+        //            [
+        0x64, //        PUSH5
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 5, //     PUSH1 5
+        0x60, 27, //    PUSH1 27
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 14, //  PUSH1 14 // size
+        0x60, 18, //  PUSH1 18 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf2] //      CALLCODE
+    );
+    let result = context.stack[1];
+    let storage = context.contractStorage;
+    let key0 : Blob = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00";
+    var storage_0 : Nat8 = 0;
+    switch (Trie.get(storage, key key0, Blob.equal)) {
+        case (null) {};
+        case (?slot0) {
+            storage_0 := slot0[31];
+        };
+    };
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Storage:", storage));
+    assert(result == 1 and storage_0 == 42);
+});
 
 // F3 RETURN
-
+await test("RETURN", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 0xab, //   PUSH1 0xAB
+        0x60, 0, //       PUSH1 0
+        0x53, //          MSTORE8
+        0x60, 0xcd, //    PUSH1 0xCD
+        0x60, 1, //       PUSH1 1
+        0x53, //          MSTORE8
+        0x60, 2, //       PUSH1 2
+        0x60, 0, //       PUSH1 0
+        0xf3] //          RETURN
+    );
+    let returnDataOpt = context.returnData;
+    var returnData = "" : Blob;
+    switch (returnDataOpt) {
+        case (null) {};
+        case (?data) {
+            returnData := data;
+        };
+    };
+    Debug.print(debug_show("Return data:", returnData));
+    assert(returnData == "\AB\CD");
+});
 
 // F4 DELEGATECALL
-
+await test("DELEGATECALL: store 42 in slot 0", func() : async () {
+    let context = await testOpCodes(
+        [0x6d, //     PUSH14
+        //            [
+        0x64, //        PUSH5
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 5, //     PUSH1 5
+        0x60, 27, //    PUSH1 27
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 14, //  PUSH1 14 // size
+        0x60, 18, //  PUSH1 18 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x84, //      DUP5    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf4] //      DELEGATECALL
+    );
+    let result = context.stack[1];
+    let storage = context.contractStorage;
+    let key0 : Blob = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00";
+    var storage_0 : Nat8 = 0;
+    switch (Trie.get(storage, key key0, Blob.equal)) {
+        case (null) {};
+        case (?slot0) {
+            storage_0 := slot0[31];
+        };
+    };
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Storage:", storage));
+    assert(result == 1 and storage_0 == 42);
+});
 
 // F5 CREATE2
+await test("CREATE2: value = 0, code = FFFFFFFF, salt = 42", func() : async () {
+    let context = await testOpCodes(
+        [0x6c,                        // PUSH13
+        0x63, 0xff, 0xff, 0xff, 0xff, // 0x63FFFFFFFF6000526004601CF3
+        0x60, 0x00, 0x52, 0x60, 0x04,
+        0x60, 0x1c, 0xf3,
+        0x60, 0,                      // PUSH1 0
+        0x52,                         // MSTORE
+        0x60, 42,                     // PUSH1 42
+        0x60, 13,                     // PUSH1 13
+        0x60, 19,                     // PUSH1 19
+        0x60, 0,                      // PUSH1 0
+        0xf5]                         // CREATE2
+    );
+    let result = context.stack;
+    let addressBuffer = Buffer.Buffer<Nat8>(20);
+    for (i in Iter.revRange(19, 0)) {
+      addressBuffer.add(Nat8.fromNat((result[0] % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+    };
+    let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+    var code = [] : [T.OpCode];
+    var balance = 0;
+    let accountData = Trie.get(context.accounts, key address, Blob.equal);
+    switch (accountData) {
+      case (null) {};
+      case (?data) {
+        let decodedData = decodeAccount(data);
+        balance := decodedData.1;
+        let codeHash = decodedData.3;
+        for (val in context.codeStore.vals()) {
+          if (val.0 == codeHash){ code := val.1 };
+        };
+      };
+    };
+    Debug.print(debug_show("Address:", address));
+    Debug.print(debug_show("Balance:", balance));
+    Debug.print(debug_show("Code:", code));
+    assert(result[0] > 0 and balance == 0 and Array.equal(code, [255, 255, 255, 255] : [Nat8], Nat8.equal));
+});
 
+await test("CREATE2: same parameters twice (should fail)", func() : async () {
+    let context = await testOpCodes(
+        [0x6c,                        // PUSH13
+        0x63, 0xff, 0xff, 0xff, 0xff, // 0x63FFFFFFFF6000526004601CF3
+        0x60, 0x00, 0x52, 0x60, 0x04,
+        0x60, 0x1c, 0xf3,
+        0x60, 0,                      // PUSH1 0
+        0x52,                         // MSTORE
+        0x60, 42,                     // PUSH1 42
+        0x60, 13,                     // PUSH1 13
+        0x60, 19,                     // PUSH1 19
+        0x60, 0,                      // PUSH1 0
+        0xf5,                         // CREATE2
+        0x50,                         // POP
+        0x60, 42,                     // PUSH1 42
+        0x60, 13,                     // PUSH1 13
+        0x60, 19,                     // PUSH1 19
+        0x60, 0,                      // PUSH1 0
+        0xf5]                         // CREATE2
+    );
+    let result = context.stack;
+    let addressBuffer = Buffer.Buffer<Nat8>(20);
+    for (i in Iter.revRange(19, 0)) {
+      addressBuffer.add(Nat8.fromNat((result[0] % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+    };
+    let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
+    var code = [] : [T.OpCode];
+    var balance = 0;
+    let accountData = Trie.get(context.accounts, key address, Blob.equal);
+    switch (accountData) {
+      case (null) {};
+      case (?data) {
+        let decodedData = decodeAccount(data);
+        balance := decodedData.1;
+        let codeHash = decodedData.3;
+        for (val in context.codeStore.vals()) {
+          if (val.0 == codeHash){ code := val.1 };
+        };
+      };
+    };
+    Debug.print(debug_show("Stack:", result));
+    Debug.print(debug_show("Address:", address));
+    Debug.print(debug_show("Balance:", balance));
+    Debug.print(debug_show("Code:", code));
+    assert(result[0] == 0 and balance == 0 and Array.equal(code, [] : [Nat8], Nat8.equal));
+});
 
 // FA STATICCALL
-
+await test("STATICCALL: store 42 in slot 0 (call should fail)", func() : async () {
+    let context = await testOpCodes(
+        [0x6d, //     PUSH14
+        //            [
+        0x64, //        PUSH5
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 5, //     PUSH1 5
+        0x60, 27, //    PUSH1 27
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 14, //  PUSH1 14 // size
+        0x60, 18, //  PUSH1 18 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x84, //      DUP5    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xfa] //      STATICCALL
+    );
+    let result = context.stack[1];
+    let storage = context.contractStorage;
+    let key0 : Blob = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00";
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Storage:", storage));
+    assert(result == 0 and Trie.get(storage, key key0, Blob.equal) == null);
+});
 
 // FD REVERT
 

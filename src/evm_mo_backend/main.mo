@@ -168,9 +168,8 @@ module {
     // Transfer the transaction value from the sender's account to the receiving account.
 
     var contractStorage : T.Storage = Trie.empty();
-    let caller = callerExCon.caller;
     for (element in Vec.vals(callerExVar.storageStore)) {
-      if (element.0 == caller) {
+      if (element.0 == callee) {
         let storageChangeKey = element.1;
         let storageSlotChange = Map.get(callerExVar.storageChanges, bhash, storageChangeKey);
         switch (storageSlotChange) {
@@ -243,7 +242,13 @@ module {
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
     if (code != []) {
-      return #ok(executeCode(subExCon, subExVar, engineInstance).1);
+      let codeOutput = executeCode(subExCon, subExVar, engineInstance).1;
+      if (codeOutput.programCounter > Array.size(subExCon.code) + 1) {
+        return #err("Subcontext reverted");
+      } else {
+        return #ok(codeOutput);
+      };
+      //return #ok(executeCode(subExCon, subExVar, engineInstance).1);
     } else {
       return #ok(subExVar);
     };
@@ -324,11 +329,9 @@ module {
     // Iterate through balance, code and storage changes, apply changes to existing accounts and add
     //  new accounts where necessary. 
     // TODO - Account for nonce changes.
-    // TODO - Detect accounts that have executed SELFDESTRUCT, as per the comments for the 
-    //  op_FF_SELFDESTRUCT function.
-    // If an account fits criteria showing that it was added anew in
-    //  the current transaction (i.e. not already in the accounts trie) and has an additional code change
-    //  to empty code then it will not be included in the updated accounts trie.
+    // If an account fits criteria indicating a SELFDESTRUCT operation, i.e. that it was added anew in
+    //  the current transaction (i.e. not already in the accounts trie), has zero balance and has a code
+    //  change to empty code then it will not be included in the updated accounts trie.
     var updatedAccounts = exCon.accounts;
 
     // Update balances
@@ -368,6 +371,7 @@ module {
     // Update code and storage
     let accountsIter = Trie.iter(updatedAccounts);
     for ((address, accountData) in accountsIter) {
+      var removedAccount = false;
       var decodedData = decodeAccount(accountData);
       // getCodeHash(address + starting code) will be the first key
       let emptyCode = Array.init<Nat8>(0, 0);
@@ -390,6 +394,15 @@ module {
           switch (change.1.newValue) {
             case (null) {
               codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+              // if change to no code, balance is 0 and address is not in exCon.accounts then flag as removedAccount
+              switch (Trie.get(exCon.accounts, key address, Blob.equal)) {
+                case (?account) {};
+                case (null) {
+                  if (decodedData.1 == 0) {
+                    removedAccount := true;
+                  };
+                };
+              };
             };
             case (?code) {
               newCode := Array.thaw<Nat8>(code);
@@ -424,6 +437,9 @@ module {
           };
         };
       };
+      if (address == exCon.callee) {
+        exVar.contractStorage := contractStorage;
+      };
       switch (Trie.get(updatedAccounts, key address, Blob.equal)) {
         case (null) {};
         case (?newData) {
@@ -431,6 +447,9 @@ module {
           let updatedEncodedData = encodeAccount(newDecodedData.0, newDecodedData.1, getStorageRoot(contractStorage), newDecodedData.3);
           updatedAccounts := Trie.put(updatedAccounts, key(address), Blob.equal, updatedEncodedData).0;
         };
+      };
+      if (removedAccount) {
+        updatedAccounts := Trie.remove(updatedAccounts, key(address), Blob.equal).0;
       };
     };
 
@@ -472,7 +491,7 @@ module {
       amount = exCon.currentGas * exCon.gasPrice;
     });
     let newExVar: T.ExecutionVariables = {
-      var programCounter = Array.size(exCon.code);
+      var programCounter = Array.size(exCon.code) + 2;
       var stack = EVMStack.EVMStack();
       var memory = Vec.new<Nat8>();
       var contractStorage = exCon.contractStorage; 
@@ -4353,7 +4372,7 @@ module {
                 } else {
                   result := 0;
                 };
-                // push to stack: the address of the deployed contract, 0 if the deployment failed
+                // push to stack: the address of the deployed contract, or 0 if the deployment failed
                 if (result > 0) {
                   var pos: Nat = 20;
                   result := 0;
@@ -4432,29 +4451,43 @@ module {
                                   };
                                   calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
                                 };
-                                // get code from account
+                                // get code from code store
                                 let addressBuffer = Buffer.Buffer<Nat8>(20);
                                 for (i in Iter.revRange(19, 0)) {
                                   addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
                                 };
                                 let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
-                                var code = [] : [T.OpCode];
+                                let emptyCode = Array.init<Nat8>(0, 0);
+                                var newCode = emptyCode;
                                 var emptyAccountCost = 0;
-                                let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
-                                switch (accountData) {
-                                  case (null) {
+                                var codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                                let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                                switch (startingAccountData) {
+                                  case (null) { // new account is being called
                                     if (value > 0) {
                                       emptyAccountCost := 25000;
                                     };
                                   };
                                   case (?data) {
-                                    let decodedData = decodeAccount(data);
-                                    let codeHash = decodedData.3;
-                                    for (val in exCon.codeStore.vals()) {
-                                      if (val.0 == codeHash){ code := val.1 };
+                                    let decodedStartingData = decodeAccount(data);
+                                    let startingCode = decodedStartingData.3;
+                                    codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Blob.toArray(startingCode)));
+                                  };
+                                };
+                                for (change in Map.entries(exVar.codeAdditions)) {
+                                  if (change.0 == codeChangeKey) {
+                                    switch (change.1.newValue) {
+                                      case (null) {
+                                        codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                                      };
+                                      case (?someCode) {
+                                        newCode := Array.thaw<Nat8>(someCode);
+                                        codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(newCode)));
+                                      };
                                     };
                                   };
                                 };
+                                let code = Array.freeze<Nat8>(newCode);
                                 // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
                                 // the remaining gas of the current context; if more then change it
                                 var gas = gas_;
@@ -4498,6 +4531,7 @@ module {
                                       Debug.print("Subcontext reverted");
                                     };
                                     case (#ok(subcontext)) {
+                                      result := 1;
                                       // store return data in memory
                                       var returnData = "" : Blob;
                                       switch (subcontext.returnData) {
@@ -4613,29 +4647,43 @@ module {
                                   };
                                   calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
                                 };
-                                // get code from account
+                                // get code from code store
                                 let addressBuffer = Buffer.Buffer<Nat8>(20);
                                 for (i in Iter.revRange(19, 0)) {
                                   addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
                                 };
                                 let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
-                                var code = [] : [T.OpCode];
+                                let emptyCode = Array.init<Nat8>(0, 0);
+                                var newCode = emptyCode;
                                 var emptyAccountCost = 0;
-                                let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
-                                switch (accountData) {
-                                  case (null) {
+                                var codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                                let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                                switch (startingAccountData) {
+                                  case (null) { // new account is being called
                                     if (value > 0) {
                                       emptyAccountCost := 25000;
                                     };
                                   };
                                   case (?data) {
-                                    let decodedData = decodeAccount(data);
-                                    let codeHash = decodedData.3;
-                                    for (val in exCon.codeStore.vals()) {
-                                      if (val.0 == codeHash){ code := val.1 };
+                                    let decodedStartingData = decodeAccount(data);
+                                    let startingCode = decodedStartingData.3;
+                                    codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Blob.toArray(startingCode)));
+                                  };
+                                };
+                                for (change in Map.entries(exVar.codeAdditions)) {
+                                  if (change.0 == codeChangeKey) {
+                                    switch (change.1.newValue) {
+                                      case (null) {
+                                        codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                                      };
+                                      case (?someCode) {
+                                        newCode := Array.thaw<Nat8>(someCode);
+                                        codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(newCode)));
+                                      };
                                     };
                                   };
                                 };
+                                let code = Array.freeze<Nat8>(newCode);
                                 // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
                                 // the remaining gas of the current context; if more then change it
                                 var gas = gas_;
@@ -4679,6 +4727,7 @@ module {
                                       Debug.print("Subcontext reverted");
                                     };
                                     case (#ok(subcontext)) {
+                                      result := 1;
                                       // store return data in memory
                                       var returnData = "" : Blob;
                                       switch (subcontext.returnData) {
@@ -4834,29 +4883,43 @@ module {
                               };
                               calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
                             };
-                            // get code from account
+                            // get code from code store
                             let addressBuffer = Buffer.Buffer<Nat8>(20);
                             for (i in Iter.revRange(19, 0)) {
                               addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
                             };
                             let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
-                            var code = [] : [T.OpCode];
+                            let emptyCode = Array.init<Nat8>(0, 0);
+                            var newCode = emptyCode;
                             var emptyAccountCost = 0;
-                            let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
-                            switch (accountData) {
-                              case (null) {
+                            var codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                            let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                            switch (startingAccountData) {
+                              case (null) { // new account is being called
                                 if (value > 0) {
                                   emptyAccountCost := 25000;
                                 };
                               };
                               case (?data) {
-                                let decodedData = decodeAccount(data);
-                                let codeHash = decodedData.3;
-                                for (val in exCon.codeStore.vals()) {
-                                  if (val.0 == codeHash){ code := val.1 };
+                                let decodedStartingData = decodeAccount(data);
+                                let startingCode = decodedStartingData.3;
+                                codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Blob.toArray(startingCode)));
+                              };
+                            };
+                            for (change in Map.entries(exVar.codeAdditions)) {
+                              if (change.0 == codeChangeKey) {
+                                switch (change.1.newValue) {
+                                  case (null) {
+                                    codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                                  };
+                                  case (?someCode) {
+                                    newCode := Array.thaw<Nat8>(someCode);
+                                    codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(newCode)));
+                                  };
                                 };
                               };
                             };
+                            let code = Array.freeze<Nat8>(newCode);
                             // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
                             // the remaining gas of the current context; if more then change it
                             var gas = gas_;
@@ -4900,6 +4963,7 @@ module {
                                   Debug.print("Subcontext reverted");
                                 };
                                 case (#ok(subcontext)) {
+                                  result := 1;
                                   // store return data in memory
                                   var returnData = "" : Blob;
                                   switch (subcontext.returnData) {
@@ -5034,7 +5098,8 @@ module {
                     let array1 = Array.append<Nat8>([0xff] : [Nat8], Blob.toArray(exCon.caller));
                     let array2 = Array.append<Nat8>(array1, saltArray);
                     let array3 = Array.append<Nat8>(array2, Blob.toArray(getCodeHash(initCode)));
-                    let addressArray = Array.subArray<Nat8>(array3, 12, 20);
+                    let array4 = Blob.toArray(getCodeHash(array3));
+                    let addressArray = Array.subArray<Nat8>(array4, 12, 20);
                     let address = Blob.fromArray(addressArray);
                     // check if account already exists at address
                     var addressIsNew = true;
@@ -5042,7 +5107,7 @@ module {
                     switch (newAccountData) {
                       case (null) {
                         for (change in Vec.vals(exVar.balanceChanges)) {
-                          if (change.to == exCon.caller) { addressIsNew := false; };
+                          if (change.to == address) { addressIsNew := false; };
                         };
                       };
                       case (?data) {
@@ -5174,29 +5239,43 @@ module {
                               };
                               calldata := Blob.fromArray(Buffer.toArray<Nat8>(calldataBuffer));
                             };
-                            // get code from account
+                            // get code from code store
                             let addressBuffer = Buffer.Buffer<Nat8>(20);
                             for (i in Iter.revRange(19, 0)) {
                               addressBuffer.add(Nat8.fromNat((addressNat % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
                             };
                             let address = Blob.fromArray(Buffer.toArray<Nat8>(addressBuffer));
-                            var code = [] : [T.OpCode];
+                            let emptyCode = Array.init<Nat8>(0, 0);
+                            var newCode = emptyCode;
                             var emptyAccountCost = 0;
-                            let accountData = Trie.get(exCon.accounts, key address, Blob.equal);
-                            switch (accountData) {
-                              case (null) {
+                            var codeChangeKey = getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                            let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
+                            switch (startingAccountData) {
+                              case (null) { // new account is being called
                                 if (value > 0) {
                                   emptyAccountCost := 25000;
                                 };
                               };
                               case (?data) {
-                                let decodedData = decodeAccount(data);
-                                let codeHash = decodedData.3;
-                                for (val in exCon.codeStore.vals()) {
-                                  if (val.0 == codeHash){ code := val.1 };
+                                let decodedStartingData = decodeAccount(data);
+                                let startingCode = decodedStartingData.3;
+                                codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Blob.toArray(startingCode)));
+                              };
+                            };
+                            for (change in Map.entries(exVar.codeAdditions)) {
+                              if (change.0 == codeChangeKey) {
+                                switch (change.1.newValue) {
+                                  case (null) {
+                                    codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(emptyCode)));
+                                  };
+                                  case (?someCode) {
+                                    newCode := Array.thaw<Nat8>(someCode);
+                                    codeChangeKey := getCodeHash(Array.append<Nat8>(Blob.toArray(address), Array.freeze<Nat8>(newCode)));
+                                  };
                                 };
                               };
                             };
+                            let code = Array.freeze<Nat8>(newCode);
                             // check gas; gas is capped at all but one 64th (remaining_gas / 64) of
                             // the remaining gas of the current context; if more then change it
                             var gas = gas_;
@@ -5224,6 +5303,7 @@ module {
                                 Debug.print("Subcontext reverted");
                               };
                               case (#ok(subcontext)) {
+                                result := 1;
                                 // store return data in memory
                                 var returnData = "" : Blob;
                                 switch (subcontext.returnData) {
@@ -5350,12 +5430,13 @@ module {
     return #err("Designated INVALID opcode called");
   };
 
-  // TODO - This function sends the caller's full balance and removes code. When the accounts trie is
+  // This function sends the caller's full balance and removes code. When the accounts trie is
   //  updated at the end of the state transition, if it fits criteria showing that it was added anew in
-  //  the current transaction (i.e. not already in the accounts trie) and has an additional code change
+  //  the current transaction (i.e. not already in the accounts trie), has zero balance and has a code change
   //  to empty code then it will not be included in the updated accounts trie. This will enable compliance
   //  with the current stipulation that the account is removed only if SELFDESTRUCT is executed in the
-  //  same transaction in which a contract was created. Gas refund might still need to be accounted for.
+  //  same transaction in which a contract was created.
+  // TODO - Gas refund might still need to be accounted for.
   let op_FF_SELFDESTRUCT = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     switch (exVar.stack.pop()) {
       case (#err(e)) { return #err(e) };
