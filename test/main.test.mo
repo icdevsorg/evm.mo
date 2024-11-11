@@ -68,7 +68,6 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     context;
 };
 
-
 // Basic Math and Bitwise Logic
 
 Debug.print(">");
@@ -1980,9 +1979,225 @@ await test("STATICCALL: store 42 in slot 0 (call should fail)", func() : async (
 });
 
 // FD REVERT
+await test("(REVERT - prior to calling)", func() : async () {
+    let context = await testOpCodes(
+        [0x62,                  // PUSH3
+        0x12, 0x34, 0x56,       // 0x123456
+        0x60, 42,               // PUSH1 42
+        0x55,                   // SSTORE
+        0x67,                   // PUSH8
+        1, 2, 3, 4, 5, 6, 7, 8, // 0x0102030405060708
+        0x60, 0,                // PUSH1 0
+        0x52,                   // MSTORE
+        0x67,                   // PUSH8
+        0x12, 0x34, 0x56, 0x78, // 0x1234567890abcdef
+        0x90, 0xab, 0xcd, 0xef,
+        0x60, 8,                // PUSH1 8
+        0x60, 24,               // PUSH1 24
+        0xa1,                   // LOG1
+        0x60, 0,                // PUSH1 0
+        0x60, 0,                // PUSH1 0
+        0x60, 9,                // PUSH1 9
+        0xf0]                   // CREATE
+    );
+    let stack = context.stack;
+    let storage = context.contractStorage;
+    let logs = context.logs;
+    let accounts = context.accounts;
+    Debug.print(debug_show("Stack:", stack));
+    Debug.print(debug_show("Storage:", storage));
+    Debug.print(debug_show("Logs:", logs));  
+    Debug.print("Accounts:");
+    var i = 0;
+    for ((k,v) in Trie.iter(accounts)) {
+        i += 1;
+        Debug.print(debug_show(i, k));
+    };
+    assert(true);
+});
 
+await test("REVERT", func() : async () {
+    let context = await testOpCodes(
+        [0x62,                  // PUSH3
+        0x12, 0x34, 0x56,       // 0x123456
+        0x60, 42,               // PUSH1 42
+        0x55,                   // SSTORE
+        0x67,                   // PUSH8
+        1, 2, 3, 4, 5, 6, 7, 8, // 0x0102030405060708
+        0x60, 0,                // PUSH1 0
+        0x52,                   // MSTORE
+        0x67,                   // PUSH8
+        0x12, 0x34, 0x56, 0x78, // 0x1234567890abcdef
+        0x90, 0xab, 0xcd, 0xef,
+        0x60, 8,                // PUSH1 8
+        0x60, 24,               // PUSH1 24
+        0xa1,                   // LOG1
+        0x60, 0,                // PUSH1 0
+        0x60, 0,                // PUSH1 0
+        0x60, 9,                // PUSH1 9
+        0xf0,                   // CREATE
+        0x60, 8,                // PUSH1 8
+        0x60, 24,               // PUSH1 24
+        0xfd,                   // REVERT
+        0x60, 42]               // PUSH1 42 // shouldn't be pushed
+    );
+    let stack = context.stack;
+    let storage = context.contractStorage;
+    let logs = context.logs;
+    let accounts = context.accounts;
+    let returnData = context.returnData;
+    Debug.print(debug_show("Stack:", stack));
+    Debug.print(debug_show("Storage:", storage));
+    Debug.print(debug_show("Logs:", logs));  
+    Debug.print("Accounts:");
+    var i = 0;
+    for ((k,v) in Trie.iter(accounts)) {
+        i += 1;
+        Debug.print(debug_show(i, k));
+    };
+    Debug.print(debug_show("Return data:", returnData));
+    assert(stack == [] and Trie.size(storage) == 0 and logs == [] and Trie.size(accounts) == 3 and returnData == ?"\01\02\03\04\05\06\07\08");
+});
+
+await test("REVERT: within subcontext", func() : async () {
+    let context = await testOpCodes(
+        [0x72, //     PUSH19
+        //            [
+        0x69, //        PUSH10
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        0x60, 0, //       PUSH1 0
+        0x60, 0, //       PUSH1 0
+        0xfd, //          REVERT
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 10, //    PUSH1 10
+        0x60, 22, //    PUSH1 22
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 19, //  PUSH1 19 // size
+        0x60, 13, //  PUSH1 13 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf2] //      CALLCODE
+    );
+    let result = context.stack[1];
+    let storage = context.contractStorage;
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Storage:", storage));
+    assert(result == 0 and Trie.size(storage) == 0);
+});
 
 // FE INVALID
+await test("INVALID", func() : async () {
+    let context = await testOpCodes(
+        [0x60, 2, // PUSH1 2
+        0x60, 1, //  PUSH1 1
+        0xfe] //     INVALID
+    );
+    let result = context.stack;
+    Debug.print(debug_show("Stack:", result));
+    assert(result == []);
+});
 
+await test("INVALID: within subcontext", func() : async () {
+    let context = await testOpCodes(
+        [0x6e, //     PUSH15
+        //            [
+        0x65, //        PUSH6
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        0xfe, //          INVALID
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 6, //     PUSH1 6
+        0x60, 26, //    PUSH1 26
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 15, //  PUSH1 15 // size
+        0x60, 17, //  PUSH1 17 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf2] //      CALLCODE
+    );
+    let stack = context.stack;
+    let result = context.stack[1];
+    let storage = context.contractStorage;
+    Debug.print(debug_show("Stack:", stack));
+    Debug.print(debug_show("Result:", result));
+    Debug.print(debug_show("Storage:", storage));
+    assert(result == 0 and Trie.size(storage) == 0);
+});
 
 // FF SELFDESTRUCT
+await test("SELFDESTRUCT", func() : async () {
+    let context = await testOpCodes(
+        [0x6f, //     PUSH16
+        //            [
+        0x66, //        PUSH7
+        //              [
+        0x60, 42, //      PUSH1 42
+        0x60, 0, //       PUSH1 0
+        0x55, //          SSTORE
+        0x32, //          ORIGIN
+        0xff, //          SELFDESTRUCT
+        //              ] // stores 42 in slot 0
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 7, //     PUSH1 7
+        0x60, 25, //    PUSH1 25
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 16, //  PUSH1 16 // size
+        0x60, 16, //  PUSH1 16 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf1] //      CALL
+    );
+    let storage = context.contractStorage;
+    let accounts = context.accounts;
+    Debug.print(debug_show("Storage:", storage));
+    Debug.print("Accounts:");
+    var i = 0;
+    for ((k,v) in Trie.iter(accounts)) {
+        i += 1;
+        Debug.print(debug_show(i, k));
+    };
+    assert(Trie.size(storage) == 0 and Trie.size(accounts) == 3);
+});
