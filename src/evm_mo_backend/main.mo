@@ -140,6 +140,7 @@ module {
       var totalGas = tx.gasLimitTx;
       var gasRefund = 0;
       var returnData = null;
+      var lastReturnData = null;
       var staticCall = 0;
     };
 
@@ -231,6 +232,7 @@ module {
       var totalGas = gas;
       var gasRefund = 0;
       var returnData = null;
+      var lastReturnData = null;
       var staticCall = callerExVar.staticCall;
     };
 
@@ -279,6 +281,7 @@ module {
           exVar.totalGas := newExVar.totalGas;
           exVar.gasRefund := newExVar.gasRefund;
           exVar.returnData := newExVar.returnData;
+          exVar.lastReturnData := newExVar.lastReturnData;
           exVar.staticCall := newExVar.staticCall;
         };
         case (#ok(output)) {
@@ -297,6 +300,7 @@ module {
           exVar.totalGas := newExVar.totalGas;
           exVar.gasRefund := newExVar.gasRefund;
           exVar.returnData := newExVar.returnData;
+          exVar.lastReturnData := newExVar.lastReturnData;
           exVar.staticCall := newExVar.staticCall;
         };
       };
@@ -503,6 +507,7 @@ module {
       var totalGas = 0;
       var gasRefund = 0;
       var returnData = null;
+      var lastReturnData = null;
       var staticCall = 0;
     };
     newExVar;
@@ -1688,7 +1693,7 @@ module {
 
   let op_3D_RETURNDATASIZE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var returnDataSize = 0;
-    switch (exVar.returnData) {
+    switch (exVar.lastReturnData) {
       case (null) {};
       case (?data) {
         returnDataSize := data.size();
@@ -1711,7 +1716,7 @@ module {
   let op_3E_RETURNDATACOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     var returnData = "" : Blob;
     var returnDataSize = 0;
-    switch (exVar.returnData) {
+    switch (exVar.lastReturnData) {
       case (null) {};
       case (?data) {
         returnData := data;
@@ -4248,7 +4253,6 @@ module {
 
 
   // Execution and System Operations
-  // TODO - Test RETURNDATASIZE & RETURNDATACOPY
   
   let op_00_STOP = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
     exVar.programCounter := Array.size(exCon.code);
@@ -4344,6 +4348,7 @@ module {
                   exVar.codeAdditions := subcontext.codeAdditions;
                   exVar.codeStore := subcontext.codeStore;
                   exVar.storageStore := subcontext.storageStore;
+                  exVar.lastReturnData := null;
                   // add initialisation subcontext return data as new account code
                   switch (subcontext.returnData) {
                     case (null) {};
@@ -4560,6 +4565,7 @@ module {
                                   exVar.codeAdditions := subcontext.codeAdditions;
                                   exVar.codeStore := subcontext.codeStore;
                                   exVar.storageStore := subcontext.storageStore;
+                                  exVar.lastReturnData := subcontext.returnData;
                                 };
                                 // success?
                                 switch (exVar.stack.push(result)) {
@@ -4753,6 +4759,7 @@ module {
                                   exVar.codeAdditions := subcontext.codeAdditions;
                                   exVar.codeStore := subcontext.codeStore;
                                   exVar.storageStore := subcontext.storageStore;
+                                  exVar.lastReturnData := subcontext.returnData;
                                 };
                                 // success?
                                 switch (exVar.stack.push(result)) {
@@ -4986,6 +4993,7 @@ module {
                               exVar.codeAdditions := subcontext.codeAdditions;
                               exVar.codeStore := subcontext.codeStore;
                               exVar.storageStore := subcontext.storageStore;
+                              exVar.lastReturnData := subcontext.returnData;
                             };
                             // success?
                             switch (exVar.stack.push(result)) {
@@ -5118,6 +5126,7 @@ module {
                       exVar.codeAdditions := subcontext.codeAdditions;
                       exVar.codeStore := subcontext.codeStore;
                       exVar.storageStore := subcontext.storageStore;
+                      exVar.lastReturnData := null;
                       // add initialisation subcontext return data as new account code
                       switch (subcontext.returnData) {
                         case (null) {};
@@ -5309,6 +5318,7 @@ module {
                                 memory_expansion_cost := new_memory_cost - memory_cost;
                               };
                             };
+                            exVar.lastReturnData := subcontext.returnData;
                             code_execution_cost := gas - subcontext.totalGas - subcontext.gasRefund;
                             exVar.staticCall -= 1;
                             // success?

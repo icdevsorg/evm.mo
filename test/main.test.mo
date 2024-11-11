@@ -1,3 +1,5 @@
+// Edit code with Find & Replace: "//Debug" => "Debug" to display detailed results.
+
 import { test; skip } "mo:test/async"; // see https://mops.one/test
 
 import { stateTransition; engine } "../src/evm_mo_backend/main";
@@ -82,7 +84,7 @@ await test("ADD: 1 + 2", func() : async () {
         [0x60, 2, 0x60, 1, 0x01] // PUSH1 2 PUSH1 1 ADD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [3]);
 });
 
@@ -100,7 +102,7 @@ await test("ADD: (2**256-3) + 5", func() : async () {
         0x01]       // ADD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [2]);
 });
 
@@ -109,7 +111,7 @@ await test("ADD: stack should underflow", func() : async () {
         [0x60, 2, 0x01] // PUSH1 2 ADD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == []);
 });
 
@@ -121,7 +123,7 @@ await test("MUL: 1000 * 2000", func() : async () {
         0x02]              // MUL
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [2_000_000]);
 });
 
@@ -138,7 +140,7 @@ await test("MUL: (2**80-6) * (2**160-6)", func() : async () {
         0x02]             // MUL
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xfffffffffffffffffff9fffffffffffffffffffa00000000000000000024]);
 });
 
@@ -148,7 +150,7 @@ await test("SUB: 8 - 20", func() : async () {
         [0x60, 20, 0x60, 8, 0x03] // PUSH1 20 PUSH1 8 SUB
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [(2**256 - 12)]);
 });
 
@@ -158,7 +160,7 @@ await test("DIV: 20 / 3", func() : async () {
         [0x60, 3, 0x60, 20, 0x04] // PUSH1 3 PUSH1 20 DIV
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [6]);
 });
 
@@ -167,7 +169,7 @@ await test("DIV: 4 / 0", func() : async () {
         [0x5F, 0x60, 4, 0x04] // PUSH0 PUSH1 4 DIV
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -186,7 +188,7 @@ await test("SDIV: 10 / -2", func() : async () {
         0x05]       // SDIV
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb]);
 });
 
@@ -204,7 +206,7 @@ await test("MOD: (2**160-5) % (2**80-127)", func() : async () {
         0x06]          // MOD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x3efc]);
 });
 
@@ -223,7 +225,7 @@ await test("SMOD: 10 % -3", func() : async () {
         0x07]       // SMOD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -248,7 +250,7 @@ await test("SMOD: -10 % -3", func() : async () {
         0x07]       // SMOD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe]); // -2
 });
 
@@ -268,7 +270,7 @@ await test("ADDMOD: ((2**256 - 1) + 20) % 8", func() : async () {
         0x08]       // ADDMOD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [3]);
 });
 
@@ -295,7 +297,7 @@ await test("MULMOD: ((2**256-1) * (2**256-2)) % 12", func() : async () {
         0x09]       // MULMOD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [6]);
 });
 
@@ -307,7 +309,7 @@ await test("EXP: 10 ** 20", func() : async () {
         0x0A]      // EXP
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [100_000_000_000_000_000_000]);
 });
 
@@ -318,7 +320,7 @@ await test("EXP: 999 ** 2000", func() : async () {
         0x0A]              // EXP
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x8c06c92f7b72b6bf4d280304f7b2545e50ce90e3b62a53cd97b7f849be413181]);
 });
 
@@ -343,7 +345,7 @@ await test("EXP: 0xD3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         0x0A]       // EXP
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x479dbf07c921bcfbea701ae69aa74de4c0efa9e82a4257f644b3480e1393a393]);
 });
 
@@ -356,7 +358,7 @@ await test("SIGNEXTEND: 4 bytes, 0xFF123456", func() : async () {
         0x0B]                   // SIGNEXTEND
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff123456]);
 });
 
@@ -368,7 +370,7 @@ await test("LT: 1000 < 2000 (true)", func() : async () {
         0x10]              // LT
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -380,7 +382,7 @@ await test("GT: 1000 > 2000 (false)", func() : async () {
         0x11]              // GT
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -400,7 +402,7 @@ await test("SLT: 1000 < -2000 (false)", func() : async () {
         0x12]       // SLT
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -420,7 +422,7 @@ await test("SGT: 1000 > -2000 (true)", func() : async () {
         0x13]       // SGT
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -432,7 +434,7 @@ await test("EQ: 1000 == 2000 (false)", func() : async () {
         0x14]              // EQ
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -443,7 +445,7 @@ await test("EQ: 1000 == 1000 (true)", func() : async () {
         0x14]              // EQ
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -454,7 +456,7 @@ await test("ISZERO: 1000 (false)", func() : async () {
         0x15]              // ISZERO
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -464,7 +466,7 @@ await test("ISZERO: 0 (true)", func() : async () {
         0x15]     // ISZERO
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -476,7 +478,7 @@ await test("AND: 0xFF00FF & 0xF0F0F0", func() : async () {
         0x16]                    // AND
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xf000f0]);
 });
 
@@ -488,7 +490,7 @@ await test("OR: 0xFF00FF | 0xF0F0F0", func() : async () {
         0x17]                    // OR
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xfff0ff]);
 });
 
@@ -500,7 +502,7 @@ await test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : async () {
         0x18]                    // XOR
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x0ff00f]);
 });
 
@@ -511,7 +513,7 @@ await test("NOT: ~ 0xF0F0F0", func() : async () {
         0x19]                    // NOT
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0f0f0f]);
 });
 
@@ -523,7 +525,7 @@ await test("BYTE: 0xF1F2F3, offset = 30", func() : async () {
         0x1A]                    // BYTE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xf2]);
 });
 
@@ -542,7 +544,7 @@ await test("SHL: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         0x1B]              // SHL
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xf00fffffffffffffffffffffffffffffffffffffffffffffffffffffffffe380]);
 });
 
@@ -561,7 +563,7 @@ await test("SHR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         0x1C]              // SHR
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xff00fffffffffffffffffffffffffffffffffffffffffffffffffffffffffe3]);
 });
 
@@ -580,7 +582,7 @@ await test("SAR: 0xFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         0x1D]              // SAR
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xfff00fffffffffffffffffffffffffffffffffffffffffffffffffffffffffe3]);
 });
 
@@ -598,7 +600,7 @@ await test("ADDRESS", func() : async () {
         [0x30]    // ADDRESS
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb]);
 });
 
@@ -613,7 +615,7 @@ await test("BALANCE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : async
         0x31]                           // BALANCE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [12345 + 123]);
 });
 
@@ -623,7 +625,7 @@ await test("ORIGIN", func() : async () {
         [0x32]    // ORIGIN
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa]);
 });
 
@@ -633,7 +635,7 @@ await test("CALLER", func() : async () {
         [0x33]    // CALLER
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa]);
 });
 
@@ -643,7 +645,7 @@ await test("CALLVALUE", func() : async () {
         [0x34]    // CALLVALUE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [123]);
 });
 
@@ -654,7 +656,7 @@ await test("CALLDATALOAD: 4", func() : async () {
         0x35]      // CALLDATALOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x6789abcdef000000000000000000000000000000000000000000000000000000]);
 });
 
@@ -664,7 +666,7 @@ await test("CALLDATASIZE", func() : async () {
         [0x36]    // CALLDATASIZE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [8]);
 });
 
@@ -677,7 +679,7 @@ await test("CALLDATACOPY: destOffset = 0, offset = 3, size = 5", func() : async 
         0x37]      // CALLDATACOPY
     );
     let result = context.memory;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x67, 0x89, 0xab, 0xcd, 0xef, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -690,7 +692,7 @@ await test("CODESIZE", func() : async () {
         [0x38]    // CODESIZE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -706,7 +708,7 @@ await test("CODECOPY: destOffset = 0, offset = 3, size = 5", func() : async () {
         0x39]                         // CODECOPY
     );
     let result = context.memory;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x45, 0x67, 0x89, 0xab, 0xcd, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -719,7 +721,7 @@ await test("GASPRICE", func() : async () {
         [0x3a]    // GASPRICE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [5]);
 });
 
@@ -734,7 +736,7 @@ await test("EXTCODESIZE: 0x00bb00bb00bb00bb00bb00bb00bb00bb00bb00bb", func() : a
         0x3b]                           // EXTCODESIZE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [22]);
 });
 
@@ -748,7 +750,7 @@ await test("EXTCODESIZE: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : a
         0x3b]                           // EXTCODESIZE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -771,7 +773,7 @@ await test(
         0x3c]                         // EXTCODECOPY
     );
     let result = context.memory;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x45, 0x67, 0x89, 0xab, 0xcd, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -779,10 +781,98 @@ await test(
 });
 
 // 3D RETURNDATASIZE
-// TODO - requires Execution and System Operations functions to be in place
+await test("RETURNDATASIZE", func() : async () {
+    let context = await testOpCodes(
+        [0x79, //     PUSH26
+        //            [
+        0x70, //        PUSH17
+        //              [
+        0x67, //          PUSH8
+        1, 2, 3, 4, //    0x0102030405060708
+        5, 6, 7, 8,
+        0x60, 0, //       PUSH1 0
+        0x52, //          MSTORE
+        0x60, 8, //       PUSH1 8
+        0x60, 24, //      PUSH1 24
+        0xf3, //          RETURN
+        //              ]
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 17, //    PUSH1 17
+        0x60, 15, //    PUSH1 15
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 26, //  PUSH1 26 // size
+        0x60, 6, //   PUSH1 6 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf1, //      CALL
+        0x3d] //      RETURNDATASIZE
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    assert(result[2] == 8);
+});
 
 // 3E RETURNDATACOPY
-// TODO - requires Execution and System Operations functions to be in place
+await test("RETURNDATACOPY", func() : async () {
+    let context = await testOpCodes(
+        [0x79, //     PUSH26
+        //            [
+        0x70, //        PUSH17
+        //              [
+        0x67, //          PUSH8
+        1, 2, 3, 4, //    0x0102030405060708
+        5, 6, 7, 8,
+        0x60, 0, //       PUSH1 0
+        0x52, //          MSTORE
+        0x60, 8, //       PUSH1 8
+        0x60, 24, //      PUSH1 24
+        0xf3, //          RETURN
+        //              ]
+        0x60, 0, //     PUSH1 0
+        0x52, //        MSTORE
+        0x60, 17, //    PUSH1 17
+        0x60, 15, //    PUSH1 15
+        0xf3, //        RETURN
+        //            ] // returns code
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x60, 26, //  PUSH1 26 // size
+        0x60, 6, //   PUSH1 6 // offset
+        0x60, 0, //   PUSH1 0 // value
+        0xf0, //      CREATE
+        0x60, 0, //   PUSH1 0 // retSize
+        0x60, 0, //   PUSH1 0 // retOffset
+        0x60, 0, //   PUSH1 0 // argsSize
+        0x60, 0, //   PUSH1 0 // argsOffset
+        0x60, 0, //   PUSH1 0 // value
+        0x85, //      DUP6    // address
+        0x61, //      PUSH2 0xFFFF // gas
+        0xff, 0xff,
+        0xf1, //      CALL
+        0x60, 0, //   PUSH1 0
+        0x60, 0, //   PUSH1 0
+        0x52, //      MSTORE
+        0x3d, //      RETURNDATASIZE
+        0x60, 0, //   PUSH1 0
+        0x60, 0, //   PUSH1 0
+        0x3e] //      RETURNDATACOPY
+    );
+    let result = context.memory;
+    //Debug.print(debug_show(result));
+    assert(Array.subArray<Nat8>(result, 0, 8) == [1, 2, 3, 4, 5, 6, 7, 8]);
+});
 
 // 3F EXTCODEHASH
 await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : async () {
@@ -795,7 +885,7 @@ await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : a
         0x3f]                           // EXTCODEHASH
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     // should return the empty hash
     assert(result == [0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855]);
 });
@@ -808,7 +898,7 @@ await test("BLOCKHASH: 999999", func() : async () {
         0x40]                // BLOCKHASH
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0xacdc460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470]);
 });
 
@@ -818,7 +908,7 @@ await test("CALLER", func() : async () {
         [0x41]    // COINBASE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc]);
 });
 
@@ -828,7 +918,7 @@ await test("TIMESTAMP", func() : async () {
         [0x42]    // TIMESTAMP
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1_500_000_000]);
 });
 
@@ -838,7 +928,7 @@ await test("NUMBER", func() : async () {
         [0x43]    // NUMBER
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1_000_000]);
 });
 
@@ -848,7 +938,7 @@ await test("DIFFICULTY", func() : async () {
         [0x44]    // DIFFICULTY
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1_000_000_000_000]);
 });
 
@@ -858,7 +948,7 @@ await test("CALLER", func() : async () {
         [0x45]    // GASLIMIT
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [30_000_000]);
 });
 
@@ -868,7 +958,7 @@ await test("CHAINID", func() : async () {
         [0x46]    // CHAINID
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [1]);
 });
 
@@ -878,7 +968,7 @@ await test("SELFBALANCE", func() : async () {
         [0x47]    // SELFBALANCE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [550000 - 100000 * 5 - 123]);
 });
 
@@ -889,7 +979,7 @@ await test("BASEFEE", func() : async () {
         [0x48]    // BASEFEE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -909,7 +999,7 @@ await test("POP", func() : async () {
         0x50]                // POP
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x123456]);
 });
 
@@ -924,7 +1014,7 @@ await test("MLOAD: 0", func() : async () {
         0x51]                // MLOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x123456]);
 });
 
@@ -937,7 +1027,7 @@ await test("MSTORE: 0, 0x123456", func() : async () {
         0x52]                // MSTORE
     );
     let result = context.memory;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0, 0, 0, 0, 0, 0, 0, 0,
                      0, 0, 0, 0, 0, 0, 0, 0,
                      0, 0, 0, 0, 0, 0, 0, 0,
@@ -952,7 +1042,7 @@ await test("MSTORE8: 5, 0xff", func() : async () {
         0x53]         // MSTORE8
     );
     let result = context.memory;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0, 0, 0, 0, 0, 0xff, 0, 0,
                      0, 0, 0, 0, 0, 0, 0, 0,
                      0, 0, 0, 0, 0, 0, 0, 0,
@@ -971,7 +1061,7 @@ await test("SSTORE: (42, 0x123456); SLOAD", func() : async () {
         0x54]                // SLOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0x123456]);
 });
 
@@ -988,7 +1078,7 @@ await test("JUMP: 10", func() : async () {
         0x01]                   // ADD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [3]);
 });
 
@@ -1006,7 +1096,7 @@ await test("JUMPI: 12, 1", func() : async () {
         0x01]                   // ADD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [3]);
 });
 
@@ -1019,7 +1109,7 @@ await test("PC", func() : async () {
         0x58]                   // PC
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [3, 5]);
 });
 
@@ -1033,7 +1123,7 @@ await test("MSIZE", func() : async () {
         0x59]                // MSIZE
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [64]);
 });
 
@@ -1044,7 +1134,7 @@ await test("GAS", func() : async () {
         0x5a]    // GAS
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0, 100000 - 2 - 2]);
 });
 
@@ -1058,7 +1148,7 @@ await test("JUMPDEST", func() : async () {
     Debug.print("JUMPDEST was tested with JUMP and JUMPI above.");
     Debug.print("This simply tests that the opcode by itself runs without error.");
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -1104,7 +1194,7 @@ await test("PUSH0", func() : async () {
         [0x5f]  // PUSH0
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0]);
 });
 
@@ -1125,7 +1215,7 @@ await test("PUSH0, PUSH1, PUSH2, PUSH6, PUSH12, PUSH32", func() : async () {
         0, 0, 0, 0, 0, 0, 0, 0]
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0, 1, 0x0200, 0x030000000000, 0x040000000000000000000000,
     0x0500000000000000000000000000000000000000000000000000000000000000]);
 });
@@ -1148,7 +1238,7 @@ await test("DUP1", func() : async () {
         0x80]                     // DUP1
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0, 1, 0x0200, 0x030000000000, 0x040000000000000000000000,
     0x0500000000000000000000000000000000000000000000000000000000000000,
     0x0500000000000000000000000000000000000000000000000000000000000000]);
@@ -1172,7 +1262,7 @@ await test("DUP4", func() : async () {
         0x83]                     // DUP4
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [0, 1, 0x0200, 0x030000000000, 0x040000000000000000000000,
     0x0500000000000000000000000000000000000000000000000000000000000000, 0x0200]);
 });
@@ -1195,7 +1285,7 @@ await test("DUP8 (should throw error)", func() : async () {
         0x87]                     // DUP7
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == []);
 });
 
@@ -1221,7 +1311,7 @@ await test("DUP1", func() : async () {
         0x8f]      // DUP16
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 16]);
 });
 
@@ -1247,7 +1337,7 @@ await test("SWAP1", func() : async () {
         0x90]      // SWAP1
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 1, 2]);
 });
 
@@ -1273,7 +1363,7 @@ await test("SWAP11", func() : async () {
         0x9a]      // SWAP11
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [16, 15, 14, 13, 1, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 12]);
 });
 
@@ -1299,7 +1389,7 @@ await test("SWAP16 (should throw error)", func() : async () {
         0x9f]      // SWAP16
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == []);
 });
 
@@ -1318,7 +1408,7 @@ await test("LOG0", func() : async () {
         0xa0]                           // LOG0
     );
     let result = context.logs;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == { topics = [] : [Blob]; data = "\04\05\06\07\08\09" : Blob });
 });
 
@@ -1340,7 +1430,7 @@ await test("LOG1", func() : async () {
         0xa1]                           // LOG1
     );
     let result = context.logs;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == { topics = ["\12\34\56\78\90\ab\cd\ef"] : [Blob]; data = "\04\05\06\07\08\09" : Blob });
 });
 
@@ -1365,7 +1455,7 @@ await test("LOG1", func() : async () {
         0xa2]                           // LOG2
     );
     let result = context.logs;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == {
         topics = [
             "\12\34\56\78\90\ab\cd\ef",
@@ -1399,7 +1489,7 @@ await test("LOG3", func() : async () {
         0xa3]                           // LOG3
     );
     let result = context.logs;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == {
         topics = [
             "\12\34\56\78\90\ab\cd\ef",
@@ -1443,7 +1533,7 @@ await test("LOG4", func() : async () {
         0xa4]                           // LOG4
     );
     let result = context.logs;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == {
         topics = [
             "\12\34\56\78\90\ab\cd\ef",
@@ -1474,7 +1564,7 @@ await test("STOP", func() : async () {
         0x01]      // ADD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     assert(result == [3]);
 });
 
@@ -1506,9 +1596,9 @@ await test("CREATE: value = 9, no code", func() : async () {
         };
       };
     };
-    Debug.print(debug_show("Address:", address));
-    Debug.print(debug_show("Balance:", balance));
-    Debug.print(debug_show("Code:", code));
+    //Debug.print(debug_show("Address:", address));
+    //Debug.print(debug_show("Balance:", balance));
+    //Debug.print(debug_show("Code:", code));
     assert(result[0] > 0 and balance == 9 and Array.equal(code, [], Nat8.equal));
 });
 
@@ -1545,9 +1635,9 @@ await test("CREATE: value = 0, code = FFFFFFFF", func() : async () {
         };
       };
     };
-    Debug.print(debug_show("Address:", address));
-    Debug.print(debug_show("Balance:", balance));
-    Debug.print(debug_show("Code:", code));
+    //Debug.print(debug_show("Address:", address));
+    //Debug.print(debug_show("Balance:", balance));
+    //Debug.print(debug_show("Code:", code));
     assert(result[0] > 0 and balance == 0 and Array.equal(code, [255, 255, 255, 255] : [Nat8], Nat8.equal));
 });
 
@@ -1593,8 +1683,8 @@ await test("CALL: return 0xabcd", func() : async () {
     );
     let result = context.stack[1];
     let memory = context.memory;
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Memory:", memory));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Memory:", memory));
     assert(result == 1 and memory[0] == 0xab and memory[1] == 0xcd);
 });
 
@@ -1639,8 +1729,8 @@ await test("CALL: return value from storage slot 0", func() : async () {
     );
     let result = context.stack[1];
     let memory = context.memory;
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Memory:", memory));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Memory:", memory));
     assert(result == 1 and memory[31] == 0);
 });
 
@@ -1679,8 +1769,8 @@ await test("CALL: store 42 in slot 0", func() : async () {
     let result = context.stack[1];
     let storage = context.contractStorage;
     let key0 : Blob = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00";
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Storage:", storage));
     assert(result == 1 and Trie.get(storage, key key0, Blob.equal) == null);
 });
 
@@ -1726,8 +1816,8 @@ await test("CALLCODE: return value from storage slot 0", func() : async () {
     );
     let result = context.stack[1];
     let memory = context.memory;
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Memory:", memory));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Memory:", memory));
     assert(result == 1 and memory[31] == 42);
 });
 
@@ -1773,8 +1863,8 @@ await test("CALLCODE: store 42 in slot 0", func() : async () {
             storage_0 := slot0[31];
         };
     };
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Storage:", storage));
     assert(result == 1 and storage_0 == 42);
 });
 
@@ -1799,7 +1889,7 @@ await test("RETURN", func() : async () {
             returnData := data;
         };
     };
-    Debug.print(debug_show("Return data:", returnData));
+    //Debug.print(debug_show("Return data:", returnData));
     assert(returnData == "\AB\CD");
 });
 
@@ -1845,8 +1935,8 @@ await test("DELEGATECALL: store 42 in slot 0", func() : async () {
             storage_0 := slot0[31];
         };
     };
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Storage:", storage));
     assert(result == 1 and storage_0 == 42);
 });
 
@@ -1885,9 +1975,9 @@ await test("CREATE2: value = 0, code = FFFFFFFF, salt = 42", func() : async () {
         };
       };
     };
-    Debug.print(debug_show("Address:", address));
-    Debug.print(debug_show("Balance:", balance));
-    Debug.print(debug_show("Code:", code));
+    //Debug.print(debug_show("Address:", address));
+    //Debug.print(debug_show("Balance:", balance));
+    //Debug.print(debug_show("Code:", code));
     assert(result[0] > 0 and balance == 0 and Array.equal(code, [255, 255, 255, 255] : [Nat8], Nat8.equal));
 });
 
@@ -1931,10 +2021,10 @@ await test("CREATE2: same parameters twice (should fail)", func() : async () {
         };
       };
     };
-    Debug.print(debug_show("Stack:", result));
-    Debug.print(debug_show("Address:", address));
-    Debug.print(debug_show("Balance:", balance));
-    Debug.print(debug_show("Code:", code));
+    //Debug.print(debug_show("Stack:", result));
+    //Debug.print(debug_show("Address:", address));
+    //Debug.print(debug_show("Balance:", balance));
+    //Debug.print(debug_show("Code:", code));
     assert(result[0] == 0 and balance == 0 and Array.equal(code, [] : [Nat8], Nat8.equal));
 });
 
@@ -1973,8 +2063,8 @@ await test("STATICCALL: store 42 in slot 0 (call should fail)", func() : async (
     let result = context.stack[1];
     let storage = context.contractStorage;
     let key0 : Blob = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00";
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Storage:", storage));
     assert(result == 0 and Trie.get(storage, key key0, Blob.equal) == null);
 });
 
@@ -2004,14 +2094,14 @@ await test("(REVERT - prior to calling)", func() : async () {
     let storage = context.contractStorage;
     let logs = context.logs;
     let accounts = context.accounts;
-    Debug.print(debug_show("Stack:", stack));
-    Debug.print(debug_show("Storage:", storage));
-    Debug.print(debug_show("Logs:", logs));  
-    Debug.print("Accounts:");
+    //Debug.print(debug_show("Stack:", stack));
+    //Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Logs:", logs));  
+    //Debug.print("Accounts:");
     var i = 0;
     for ((k,v) in Trie.iter(accounts)) {
         i += 1;
-        Debug.print(debug_show(i, k));
+        //Debug.print(debug_show(i, k));
     };
     assert(true);
 });
@@ -2046,16 +2136,16 @@ await test("REVERT", func() : async () {
     let logs = context.logs;
     let accounts = context.accounts;
     let returnData = context.returnData;
-    Debug.print(debug_show("Stack:", stack));
-    Debug.print(debug_show("Storage:", storage));
-    Debug.print(debug_show("Logs:", logs));  
-    Debug.print("Accounts:");
+    //Debug.print(debug_show("Stack:", stack));
+    //Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Logs:", logs));  
+    //Debug.print("Accounts:");
     var i = 0;
     for ((k,v) in Trie.iter(accounts)) {
         i += 1;
-        Debug.print(debug_show(i, k));
+        //Debug.print(debug_show(i, k));
     };
-    Debug.print(debug_show("Return data:", returnData));
+    //Debug.print(debug_show("Return data:", returnData));
     assert(stack == [] and Trie.size(storage) == 0 and logs == [] and Trie.size(accounts) == 3 and returnData == ?"\01\02\03\04\05\06\07\08");
 });
 
@@ -2096,8 +2186,8 @@ await test("REVERT: within subcontext", func() : async () {
     );
     let result = context.stack[1];
     let storage = context.contractStorage;
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Storage:", storage));
     assert(result == 0 and Trie.size(storage) == 0);
 });
 
@@ -2109,7 +2199,7 @@ await test("INVALID", func() : async () {
         0xfe] //     INVALID
     );
     let result = context.stack;
-    Debug.print(debug_show("Stack:", result));
+    //Debug.print(debug_show("Stack:", result));
     assert(result == []);
 });
 
@@ -2149,9 +2239,9 @@ await test("INVALID: within subcontext", func() : async () {
     let stack = context.stack;
     let result = context.stack[1];
     let storage = context.contractStorage;
-    Debug.print(debug_show("Stack:", stack));
-    Debug.print(debug_show("Result:", result));
-    Debug.print(debug_show("Storage:", storage));
+    //Debug.print(debug_show("Stack:", stack));
+    //Debug.print(debug_show("Result:", result));
+    //Debug.print(debug_show("Storage:", storage));
     assert(result == 0 and Trie.size(storage) == 0);
 });
 
@@ -2192,12 +2282,12 @@ await test("SELFDESTRUCT", func() : async () {
     );
     let storage = context.contractStorage;
     let accounts = context.accounts;
-    Debug.print(debug_show("Storage:", storage));
-    Debug.print("Accounts:");
+    //Debug.print(debug_show("Storage:", storage));
+    //Debug.print("Accounts:");
     var i = 0;
     for ((k,v) in Trie.iter(accounts)) {
         i += 1;
-        Debug.print(debug_show(i, k));
+        //Debug.print(debug_show(i, k));
     };
     assert(Trie.size(storage) == 0 and Trie.size(accounts) == 3);
 });

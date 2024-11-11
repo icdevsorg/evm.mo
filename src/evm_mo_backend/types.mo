@@ -101,6 +101,7 @@ module {
     var totalGas: Nat;
     var gasRefund: Nat;
     var returnData: ?Blob;
+    var lastReturnData: ?Blob;
     var staticCall: Nat;
   };
 
