@@ -887,7 +887,7 @@ await test("EXTCODEHASH: 0x00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa", func() : a
     let result = context.stack;
     //Debug.print(debug_show(result));
     // should return the empty hash
-    assert(result == [0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855]);
+    assert(result == [0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470]);
 });
 
 // 40 BLOCKHASH
@@ -2290,4 +2290,27 @@ await test("SELFDESTRUCT", func() : async () {
         //Debug.print(debug_show(i, k));
     };
     assert(Trie.size(storage) == 0 and Trie.size(accounts) == 3);
+});
+
+// Other
+
+Debug.print(">");
+Debug.print(">");
+Debug.print(">  Other");
+Debug.print(">");
+Debug.print(">");
+
+// 20 KECCAK256
+await test("KECCAK256: \\AB\\CD\\EF", func() : async () {
+    let context = await testOpCodes(
+        [0x62, 0xab, 0xcd, 0xef, // PUSH3 0xabcdef
+        0x60, 0,                 // PUSH1 0
+        0x52,                    // MSTORE
+        0x60, 3,                 // PUSH1 3
+        0x60, 29,                // PUSH1 29
+        0x20]                    // KECCAK256
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    assert(result == [0x800d501693feda2226878e1ec7869eef8919dbc5bd10c2bcd031b94d73492860]);
 });

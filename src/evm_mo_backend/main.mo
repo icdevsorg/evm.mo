@@ -14,6 +14,7 @@ import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import { bhash } "mo:map/Map";
 import Sha256 "mo:sha2/Sha256"; // see https://mops.one/sha2
+import Sha3 "mo:sha3/"; // see https://mops.one/sha3
 import MPTrie "mo:merkle-patricia-trie/Trie"; // see https://github.com/f0i/merkle-patricia-trie.mo
 import K "mo:merkle-patricia-trie/Key";
 import V "mo:merkle-patricia-trie/Value";
@@ -514,7 +515,9 @@ module {
   };
 
   func getCodeHash(code: [T.OpCode]) : Blob {
-    Sha256.fromArray(#sha256, code);
+    var sha = Sha3.Keccak(256);
+    sha.update(code);
+    Blob.fromArray(sha.finalize());
   };
 
   func getStorageRoot(storage: T.Storage) : Blob {
@@ -4311,8 +4314,10 @@ module {
                 // calculate address of new account
                 //   address = keccak256(rlp([sender_address,sender_nonce]))[12:]
                 let encodedBlob = encodeAddressNonce(callerAddress, callerNonce);
-                let hashedRLP = Sha256.fromBlob(#sha256, encodedBlob);
-                let addressArray = Array.subArray<Nat8>(Blob.toArray(hashedRLP), 12, 20);
+                var sha = Sha3.Keccak(256);
+                sha.update(Blob.toArray(encodedBlob));
+                let hashedRLP = sha.finalize();
+                let addressArray = Array.subArray<Nat8>(hashedRLP, 12, 20);
                 let address = Blob.fromArray(addressArray);
                 // check if account already exists at address
                 var addressIsNew = true;
@@ -5541,8 +5546,56 @@ module {
 
   // Other
 
-  let op_20_KECCAK256 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-
+  let op_20_KECCAK256 = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> {
+    switch (exVar.stack.pop()) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(offset)) {
+        switch (exVar.stack.pop()) {
+          case (#err(e)) { return #err(e) };
+          case (#ok(size)) {
+            let memory_byte_size = Vec.size(exVar.memory);
+            let memory_size_word = (memory_byte_size + 31) / 32;
+            let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
+            var new_memory_cost = memory_cost;
+            if (offset + size > memory_byte_size) {
+              let new_memory_size_word = (offset + size + 31) / 32;
+              let new_memory_byte_size = new_memory_size_word * 32;
+              Vec.addMany(exVar.memory, new_memory_byte_size - memory_byte_size, Nat8.fromNat(0));
+              new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
+            };
+            let dataBuffer = Buffer.Buffer<Nat8>(4);
+            if (size > 0) {
+              for (pos in Iter.range(offset, offset + size - 1)) {
+                dataBuffer.add(Vec.get(exVar.memory, pos));
+              };
+            };
+            let dataArray = Buffer.toArray<Nat8>(dataBuffer);
+            let hashBlob = getCodeHash(dataArray);
+            var pos: Nat = 32;
+            var hashNat: Nat = 0;
+            for (byte: Nat8 in hashBlob.vals()) {
+              pos -= 1;
+              hashNat += Nat8.toNat(byte) * (256 ** pos);
+            };
+            switch (exVar.stack.push(hashNat)) {
+              case (#err(e)) { return #err(e) };
+              case (#ok(_)) {
+                let memory_expansion_cost = new_memory_cost - memory_cost;
+                let newGas: Int = exVar.totalGas - 30 - memory_expansion_cost;
+                if (newGas < 0) {
+                  return #err("Out of gas")
+                  } else {
+                  exVar.totalGas := Int.abs(newGas);
+                  return #ok(exVar);
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+  
   let op_49_BLOBHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
   let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
