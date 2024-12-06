@@ -247,11 +247,9 @@ module {
 
     // Call pre-compile if applicable
     if (codeAddress > 0 and codeAddress < 10) {
-      // call pre-compile
-      Debug.print("Called pre-compile"); // TODO - remove once complete
-      let codeOutput = callPreCompile[codeAddress](subExCon, subExVar, engineInstance).1;
+      let codeOutput = callPreCompile[codeAddress](subExCon, subExVar, engineInstance);
       if (codeOutput.programCounter > Array.size(subExCon.code) + 1) {
-        Debug.print("Subcontext reverted");
+        Debug.print("Insufficient gas for precompiled contract call");
       };
       let gasSpent = gas - codeOutput.totalGas;
       if (codeOutput.gasRefund > gasSpent / 5) {

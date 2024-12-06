@@ -6,6 +6,7 @@ rlp-motoko = "https://github.com/relaxed04/rlp-motoko#master@16ee578b1315dd16071
 sha2 = "0.1.0"
 merkle-patricia-trie = "1.0.0"
 sha3 = "0.1.1"
+bitcoin = "0.1.0"
 
 [dev-dependencies]
 test = "2.0.0"

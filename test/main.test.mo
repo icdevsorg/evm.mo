@@ -2314,3 +2314,106 @@ await test("KECCAK256: \\AB\\CD\\EF", func() : async () {
     //Debug.print(debug_show(result));
     assert(result == [0x800d501693feda2226878e1ec7869eef8919dbc5bd10c2bcd031b94d73492860]);
 });
+
+// Precompiled Contracts
+
+Debug.print(">");
+Debug.print(">");
+Debug.print(">  Precompiled Contracts");
+Debug.print(">");
+Debug.print(">");
+
+// 0001 ECDSA Recovery
+
+// 0002 SHA-256 Hash Function
+await test("0002 SHA-256 Hash Function", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x62,     // PUSH3 0xabcdef // data
+        0xab, 0xcd, 0xef,
+        0x60, 0,  // PUSH1 0
+        0x52,     // MSTORE
+        //  Call function
+        0x60, 32, // PUSH1 32 // retSize
+        0x60, 32, // PUSH1 32 // retOffset
+        0x60, 3,  // PUSH1 3 // argsSize
+        0x60, 29, // PUSH1 29 // argsOffset
+        0x60, 2,  // PUSH1 2 // address
+        0x61,     // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,     // STATICCALL
+        //  Put result on the stack
+        0x50,     // POP
+        0x60, 32, // PUSH1 0x20
+        0x51]     // MLOAD
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [0x995da3cf545787d65f9ced52674e92ee8171c87c7a4008aa4349ec47d21609a7]);
+});
+
+// 0003 RIPEMD-160 Hash Function
+await test("0003 RIPEMD-160 Hash Function", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x62,     // PUSH3 0xabcdef // data
+        0xab, 0xcd, 0xef,
+        0x60, 0,  // PUSH1 0
+        0x52,     // MSTORE
+        //  Call function
+        0x60, 32, // PUSH1 32 // retSize
+        0x60, 32, // PUSH1 32 // retOffset
+        0x60, 3,  // PUSH1 3 // argsSize
+        0x60, 29, // PUSH1 29 // argsOffset
+        0x60, 3,  // PUSH1 3 // address
+        0x61,     // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,     // STATICCALL
+        //  Put result on the stack
+        0x50,     // POP
+        0x60, 32, // PUSH1 0x20
+        0x51]     // MLOAD
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [0xa3335a6ee4a6da99932aeee33423dd9afe8623d7]);
+});
+
+// 0004 Identity Function
+await test("0004 Identity Function", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x60, 42, // PUSH1 42 // data
+        0x60, 0,  // PUSH1 0
+        0x52,     // MSTORE
+        //  Call function
+        0x60, 1,  // PUSH1 1 // retSize
+        0x60, 63, // PUSH1 63 // retOffset
+        0x60, 1,  // PUSH1 1 // argsSize
+        0x60, 31, // PUSH1 31 // argsOffset
+        0x60, 4,  // PUSH1 4 // address
+        0x61,     // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,     // STATICCALL
+        //  Put result on the stack
+        0x50,     // POP
+        0x60, 32, // PUSH1 0x20
+        0x51]     // MLOAD
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [42]);
+});
+
+// 0005 Modular Exponentiation
+
+// 0006 Elliptic Curve Addition
+
+// 0007 Elliptic Curve Scalar Multiplication
+
+// 0008 Elliptic Curve Pairing Check
+
+// 0009 Blake2 Compression Function F
