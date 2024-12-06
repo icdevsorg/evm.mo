@@ -19,6 +19,7 @@ import MPTrie "mo:merkle-patricia-trie/Trie"; // see https://github.com/f0i/merk
 import K "mo:merkle-patricia-trie/Key";
 import V "mo:merkle-patricia-trie/Value";
 import { encodeAccount; decodeAccount; encodeAddressNonce } "rlp"; // see https://github.com/relaxed04/rlp-motoko
+import { callPreCompile } "precompiles";
 import EVMStack "evmStack";
 import T "types";
 
@@ -160,6 +161,7 @@ module {
     gas: Nat,
     value: Nat,
     callee: T.Address,
+    codeAddress: Nat,
     calldata: Blob,
     callerExCon: T.ExecutionContext,
     callerExVar : T.ExecutionVariables,
@@ -242,6 +244,21 @@ module {
       to = callee;
       amount = value;
     });
+
+    // Call pre-compile if applicable
+    if (codeAddress > 0 and codeAddress < 10) {
+      // call pre-compile
+      Debug.print("Called pre-compile"); // TODO - remove once complete
+      let codeOutput = callPreCompile[codeAddress](subExCon, subExVar, engineInstance).1;
+      if (codeOutput.programCounter > Array.size(subExCon.code) + 1) {
+        Debug.print("Subcontext reverted");
+      };
+      let gasSpent = gas - codeOutput.totalGas;
+      if (codeOutput.gasRefund > gasSpent / 5) {
+        codeOutput.gasRefund := gasSpent / 5;
+      };
+      return codeOutput;
+    };
 
     // If the receiving account is a contract, run the contract's code either to completion or until the execution runs out of gas.
     if (code != []) {
@@ -4342,6 +4359,7 @@ module {
                     gas,
                     value,
                     address,
+                    0,
                     "" : Blob, // calldata
                     exCon,
                     exVar,
@@ -4466,7 +4484,7 @@ module {
                                 let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
                                 switch (startingAccountData) {
                                   case (null) { // new account is being called
-                                    if (value > 0) {
+                                    if (value > 0 and addressNat > 9) {
                                       emptyAccountCost := 25000;
                                     };
                                   };
@@ -4525,6 +4543,7 @@ module {
                                     gas,
                                     value,
                                     address,
+                                    addressNat,
                                     calldata,
                                     exCon,
                                     exVar,
@@ -4660,7 +4679,7 @@ module {
                                 let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
                                 switch (startingAccountData) {
                                   case (null) { // new account is being called
-                                    if (value > 0) {
+                                    if (value > 0 and addressNat > 9) {
                                       emptyAccountCost := 25000;
                                     };
                                   };
@@ -4719,6 +4738,7 @@ module {
                                     gas,
                                     value,
                                     exCon.callee, // uses own address
+                                    addressNat,
                                     calldata,
                                     exCon,
                                     exVar,
@@ -4894,7 +4914,7 @@ module {
                             let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
                             switch (startingAccountData) {
                               case (null) { // new account is being called
-                                if (value > 0) {
+                                if (value > 0 and addressNat > 9) {
                                   emptyAccountCost := 25000;
                                 };
                               };
@@ -4953,6 +4973,7 @@ module {
                                 gas,
                                 value,
                                 exCon.callee, // uses own address
+                                addressNat,
                                 calldata,
                                 exCon,
                                 exVar,
@@ -5120,6 +5141,7 @@ module {
                         gas,
                         value,
                         address,
+                        0,
                         "" : Blob, // calldata
                         exCon,
                         exVar,
@@ -5242,7 +5264,7 @@ module {
                             let startingAccountData = Trie.get(exCon.accounts, key address, Blob.equal);
                             switch (startingAccountData) {
                               case (null) { // new account is being called
-                                if (value > 0) {
+                                if (value > 0 and addressNat > 9) {
                                   emptyAccountCost := 25000;
                                 };
                               };
@@ -5285,6 +5307,7 @@ module {
                               gas,
                               value,
                               address,
+                              addressNat,
                               calldata,
                               exCon,
                               exVar,
