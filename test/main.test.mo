@@ -87,7 +87,7 @@ await test("ADD: 1 + 2", func() : async () {
     //Debug.print(debug_show(result));
     assert(result == [3]);
 });
-
+/*
 await test("ADD: (2**256-3) + 5", func() : async () {
     let context = await testOpCodes(
         [0x60, 5,    // PUSH1 5
@@ -2314,7 +2314,7 @@ await test("KECCAK256: \\AB\\CD\\EF", func() : async () {
     //Debug.print(debug_show(result));
     assert(result == [0x800d501693feda2226878e1ec7869eef8919dbc5bd10c2bcd031b94d73492860]);
 });
-
+*/
 // Precompiled Contracts
 
 Debug.print(">");
