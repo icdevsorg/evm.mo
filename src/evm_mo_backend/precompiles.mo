@@ -6,6 +6,12 @@ import Array "mo:base/Array";
 import Option "mo:base/Option";
 import Buffer "mo:base/Buffer";
 import Iter "mo:base/Iter";
+import Result "mo:base/Result";
+import Ecdsa "mo:libsecp256k1/Ecdsa";
+import Signature "mo:libsecp256k1/Signature";
+import Message "mo:libsecp256k1/Message";
+import RecoveryId "mo:libsecp256k1/RecoveryId";
+import Ecmult "mo:libsecp256k1/core/ecmult";
 import Sha256 "mo:sha2/Sha256";
 import Sha3 "mo:sha3/";
 import Ripemd160 "mo:bitcoin/Ripemd160";
@@ -96,6 +102,18 @@ module {
         return Q;
     };
 
+    func ecRecoverError(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionVariables {
+        let newGas: Int = exVar.totalGas - 3000;
+        if (newGas < 0) {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+        } else {
+            exVar.totalGas := Int.abs(newGas);
+            return exVar;
+        };
+    };
+
     // Pre-compiled contract functions
 
     let pc_00_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
@@ -133,73 +151,44 @@ module {
 
     let pc_01_ecRecover = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
         // Derive input data from calldata
-        var hash: Nat = 0;
-        var v: Nat = 0;
-        var r: Nat = 0;
-        var s: Nat = 0;
         let inputArray = Blob.toArray(exCon.calldata);
-        var pos: Nat = 32;
-        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 0, 32).vals()) {
-          pos -= 1;
-          hash += Nat8.toNat(byte) * (256 ** pos);
-        };
-        pos := 32;
-        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 32, 32).vals()) {
-          pos -= 1;
-          v += Nat8.toNat(byte) * (256 ** pos);
-        };
-        pos := 32;
-        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 64, 32).vals()) {
-          pos -= 1;
-          r += Nat8.toNat(byte) * (256 ** pos);
-        };
-        pos := 32;
-        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 96, 32).vals()) {
-          pos -= 1;
-          s += Nat8.toNat(byte) * (256 ** pos);
-        };
+        let hash = Array.subArray<Nat8>(inputArray, 0, 32);
+        let v = Array.subArray<Nat8>(inputArray, 32, 32);
+        let r = Array.subArray<Nat8>(inputArray, 64, 32);
+        let s = Array.subArray<Nat8>(inputArray, 96, 32);
         // Calculate result
-        var valid = true;
-        let p = 115792089237316195423570985008687907853269984665640564039457584007908834671663;
-        let a = 0;  // curve parameter a
-        let b = 7;  // curve parameter b
-        let n = 115792089237316195423570985008687907852837564279074904382605163141518161494337; // curve order
-        let Gx = 55066263022277343669578718895168534326250603453777594175500187360389116729240;
-        let Gy = 32670510020758816978083085130507043184471273380659243275938904335757337490930;
-        // Step 1: Compute x-coordinate of R
-        let x = modAdd(r, (v / 2) * n, p);
-        if (x >= p) return exVar; // Invalid x-coordinate
-        // Step 2: Compute y-coordinate of R
-        let alpha = modAdd(modAdd(modMul(x, modMul(x, x, p), p), a * x % p, p), b, p);
-        let beta = modPow(alpha, (p + 1) / 4, p); // Modular square root
-        let y = if ((v % 2 == 0) == (beta % 2 == 0)) beta else p - beta;
-        let R = ?(x, y);
-        // Step 3: Compute u1 and u2
-        let s_inv = modInv(s, n);
-        let u1 = modMul(hash, s_inv, n);
-        let u2 = modMul(r, s_inv, n);
-        // Step 4: Compute Q = u1 * G + u2 * R
-        let G = ?(Gx, Gy);
-        let u1G = scalarMultiply(u1, G, p);
-        let u2R = scalarMultiply(u2, R, p);
-        let publicKeyAsPoint = pointAdd(u1G, u2R, p);
-        // Step 5: Convert public key to public address
-        var publicKey = "" : Blob;
-        switch (publicKeyAsPoint) {
-            case (?(PK1, PK2)){
-                let keyBuffer = Buffer.Buffer<Nat8>(8);
-                for (i in Iter.revRange(31, 0)) {
-                    keyBuffer.add(Nat8.fromNat((PK1 % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        // Modified from https://github.com/av1ctor/evm-txs.mo/blob/main/src/Address.mo
+        let signature = Array.append<Nat8>(r, s);
+        let recoveryId = v[31];
+        let message = hash;
+        let context = Ecmult.ECMultContext(null);
+        var publicKeyArray = [] : [Nat8];
+        switch(Signature.parse_standard(signature)) {
+            case (#ok(signatureParsed)) {
+                switch(RecoveryId.parse(recoveryId)) {
+                    case (#ok(recoveryIdParsed)) {
+                        let messageParsed = Message.parse(message);
+                        switch(Ecdsa.recover_with_context(
+                            messageParsed, signatureParsed, recoveryIdParsed, context)) {
+                            case (#ok(publicKey)) {
+                                publicKeyArray := publicKey.serialize_compressed();
+                            };
+                            case (#err(msg)) {
+                                return ecRecoverError(exCon, exVar);
+                            };
+                        };
+                    };
+                    case (#err(msg)) {
+                        return ecRecoverError(exCon, exVar);
+                    };
                 };
-                for (i in Iter.revRange(31, 0)) {
-                    keyBuffer.add(Nat8.fromNat((PK2 % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
-                };
-                publicKey := Blob.fromArray(Buffer.toArray<Nat8>(keyBuffer));
             };
-            case (null) { return exVar; };
+            case (#err(msg)) {
+                return ecRecoverError(exCon, exVar);
+            };
         };
         var sha = Sha3.Keccak(256);
-        sha.update(Blob.toArray(publicKey));
+        sha.update(publicKeyArray);
         let keyHashArray = sha.finalize();
         let addressArray = Array.subArray<Nat8>(keyHashArray, 12, 20);
         let zeroArray = Array.freeze<Nat8>(Array.init<Nat8>(12, 0));

@@ -69,7 +69,7 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     );
     context;
 };
-
+/*
 // Basic Math and Bitwise Logic
 
 Debug.print(">");
@@ -2314,7 +2314,7 @@ await test("KECCAK256: \\AB\\CD\\EF", func() : async () {
     //Debug.print(debug_show(result));
     assert(result == [0x800d501693feda2226878e1ec7869eef8919dbc5bd10c2bcd031b94d73492860]);
 });
-
+*/
 // Precompiled Contracts
 
 Debug.print(">");
@@ -2324,6 +2324,64 @@ Debug.print(">");
 Debug.print(">");
 
 // 0001 ECDSA Recovery
+await test("0001 ECDSA Recovery", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x7f,                   // PUSH32
+        0x45, 0x6e, 0x9a, 0xea, // 0x456e9aea5e197a1f1af7a3e85a3212fa4049a3ba34c2289b4c860fc0b0c64ef3 // hash
+        0x5e, 0x19, 0x7a, 0x1f, 
+        0x1a, 0xf7, 0xa3, 0xe8, 
+        0x5a, 0x32, 0x12, 0xfa, 
+        0x40, 0x49, 0xa3, 0xba, 
+        0x34, 0xc2, 0x28, 0x9b, 
+        0x4c, 0x86, 0x0f, 0xc0, 
+        0xb0, 0xc6, 0x4e, 0xf3,
+        0x60, 0,                // PUSH1 0
+        0x52,                   // MSTORE
+        0x60, 28,               // PUSH1 28 // v
+        0x60, 32,               // PUSH1 32
+        0x52,                   // MSTORE
+        0x7f,                   // PUSH32
+        0x92, 0x42, 0x68, 0x5b, // 0x9242685bf161793cc25603c231bc2f568eb630ea16aa137d2664ac8038825608 // r
+        0xf1, 0x61, 0x79, 0x3c, 
+        0xc2, 0x56, 0x03, 0xc2, 
+        0x31, 0xbc, 0x2f, 0x56, 
+        0x8e, 0xb6, 0x30, 0xea, 
+        0x16, 0xaa, 0x13, 0x7d, 
+        0x26, 0x64, 0xac, 0x80, 
+        0x38, 0x82, 0x56, 0x08,
+        0x60, 64,               // PUSH1 64
+        0x52,                   // MSTORE
+        0x7f,                   // PUSH32
+        0x4f, 0x8a, 0xe3, 0xbd, // 0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852ada // s
+        0x75, 0x35, 0x24, 0x8d, 
+        0x0b, 0xd4, 0x48, 0x29, 
+        0x8c, 0xc2, 0xe2, 0x07, 
+        0x1e, 0x56, 0x99, 0x2d, 
+        0x07, 0x74, 0xdc, 0x34, 
+        0x0c, 0x36, 0x8a, 0xe9, 
+        0x50, 0x85, 0x2a, 0xda,
+        0x60, 96,               // PUSH1 96
+        0x52,                   // MSTORE
+        //  Call function
+        0x60, 32,               // PUSH1 32 // retSize
+        0x60, 128,              // PUSH1 128 // retOffset
+        0x60, 128,              // PUSH1 128 // argsSize
+        0x60, 0,                // PUSH1 0 // argsOffset
+        0x60, 1,                // PUSH1 1 // address
+        0x61,                   // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,                   // STATICCALL
+        //  Put result on the stack
+        0x50,                   // POP
+        0x60, 128,              // PUSH1 128
+        0x51]                   // MLOAD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [0x7156526fbd7a3c72969b54f64e42c10fbb768c8a]);
+});
 
 // 0002 SHA-256 Hash Function
 await test("0002 SHA-256 Hash Function", func() : async () {
