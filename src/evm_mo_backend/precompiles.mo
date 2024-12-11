@@ -9,8 +9,6 @@ import Iter "mo:base/Iter";
 import Sha256 "mo:sha2/Sha256";
 import Sha3 "mo:sha3/";
 import Ripemd160 "mo:bitcoin/Ripemd160";
-import Affine "mo:bitcoin/ec/Affine";
-import Curves "mo:bitcoin/ec/Curves";
 import T "types";
 
 module {
@@ -39,13 +37,28 @@ module {
         while (t > 0) {
             let q = b / t;
             //(t, a, b, u) := (b % t, u, t, a + (m - q) * u % m);
-            // These might need to run in parallel
+            let t1 = t;
+            let a1 = a;
             t := b % t;
             a := u;
-            b := t;
-            u := a + (m - q) * u % m;
+            b := t1;
+            u := a1 + (m - q) * u % m;
         };
-        return if (b == 1) a % m else 0; // Inverse exists only if gcd == 1
+        return if (b == 1) a % m else 0; // Inverse exists only if greatest common denominator == 1
+    };
+
+    //modfied from https://forum.dfinity.org/t/reject-text-ic0503-canister-trapped-explicitly-bigint-function-error/26937/3
+    func modPow(b: Nat, e: Nat, m: Nat) : Nat {
+        var result: Nat = 1;
+        var b_ = b;
+        var e_ = e;
+        b_ := b_ % m;
+        while (e_ > 0){
+            if(e_ % 2 == 1) result := (result * b_) % m;
+            e_ := e_ / 2;
+            b_ := (b_ * b_) % m
+        };
+        return result;
     };
 
     func pointAdd(P: Point, Q: Point, p: Nat): Point {
@@ -54,14 +67,11 @@ module {
                 let (x1, y1) = (P1, P2);
                 let (x2, y2) = (Q1, Q2);
                 if (x1 == x2 and y1 == (p - y2 % p)) return null; // Point at infinity
-
                 let m = if (P == Q) {
-                    //modMul(3 * x1 * x1 + a, modInv(2 * y1, p), p)
                     modMul(3 * x1 * x1, modInv(2 * y1, p), p)
                 } else {
                     modMul(modSub(y2, y1, p), modInv(modSub(x2, x1, p), p), p)
                 };
-
                 let x3 = modSub(modMul(m, m, p), modAdd(x1, x2, p), p);
                 let y3 = modSub(modMul(m, modSub(x1, x3, p), p), y1, p);
                 return ?(x3, y3);
@@ -76,7 +86,6 @@ module {
         var Q: Point = null; // Point at infinity
         var R: Point = P;
         var scalar = k;
-
         while (scalar > 0) {
             if (scalar % 2 == 1) {
                 Q := pointAdd(Q, R, p);
@@ -151,7 +160,7 @@ module {
         };
         // Calculate result
         var valid = true;
-        let p = 115792089237316195423570985008687907852837564279074904382605163141518161494337;
+        let p = 115792089237316195423570985008687907853269984665640564039457584007908834671663;
         let a = 0;  // curve parameter a
         let b = 7;  // curve parameter b
         let n = 115792089237316195423570985008687907852837564279074904382605163141518161494337; // curve order
@@ -162,7 +171,7 @@ module {
         if (x >= p) return exVar; // Invalid x-coordinate
         // Step 2: Compute y-coordinate of R
         let alpha = modAdd(modAdd(modMul(x, modMul(x, x, p), p), a * x % p, p), b, p);
-        let beta = Nat.pow(alpha, (p + 1) / 4) % p; // Modular square root
+        let beta = modPow(alpha, (p + 1) / 4, p); // Modular square root
         let y = if ((v % 2 == 0) == (beta % 2 == 0)) beta else p - beta;
         let R = ?(x, y);
         // Step 3: Compute u1 and u2
