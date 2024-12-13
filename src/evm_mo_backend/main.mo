@@ -1051,12 +1051,12 @@ module {
           case (#ok(b)) {
             let a1: Nat64 = Nat64.fromNat(a / 2**192);
             let a2: Nat64 = Nat64.fromNat((a / 2**128) % 2**64);
-            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**128);
-            let a4: Nat64 = Nat64.fromNat(a % 2**192);
+            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**64);
+            let a4: Nat64 = Nat64.fromNat(a % 2**64);
             let b1: Nat64 = Nat64.fromNat(b / 2**192);
             let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
-            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
-            let b4: Nat64 = Nat64.fromNat(b % 2**192);
+            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**64);
+            let b4: Nat64 = Nat64.fromNat(b % 2**64);
             let result = Nat64.toNat(a1 & b1) * 2**192 + Nat64.toNat(a2 & b2) * 2**128 + Nat64.toNat(a3 & b3) * 2**64 + Nat64.toNat(a4 & b4);
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
@@ -1084,12 +1084,12 @@ module {
           case (#ok(b)) {
             let a1: Nat64 = Nat64.fromNat(a / 2**192);
             let a2: Nat64 = Nat64.fromNat((a / 2**128) % 2**64);
-            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**128);
-            let a4: Nat64 = Nat64.fromNat(a % 2**192);
+            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**64);
+            let a4: Nat64 = Nat64.fromNat(a % 2**64);
             let b1: Nat64 = Nat64.fromNat(b / 2**192);
             let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
-            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
-            let b4: Nat64 = Nat64.fromNat(b % 2**192);
+            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**64);
+            let b4: Nat64 = Nat64.fromNat(b % 2**64);
             let result = Nat64.toNat(a1 | b1) * 2**192 + Nat64.toNat(a2 | b2) * 2**128 + Nat64.toNat(a3 | b3) * 2**64 + Nat64.toNat(a4 | b4);
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
@@ -1117,12 +1117,12 @@ module {
           case (#ok(b)) {
             let a1: Nat64 = Nat64.fromNat(a / 2**192);
             let a2: Nat64 = Nat64.fromNat((a / 2**128) % 2**64);
-            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**128);
-            let a4: Nat64 = Nat64.fromNat(a % 2**192);
+            let a3: Nat64 = Nat64.fromNat((a / 2**64) % 2**64);
+            let a4: Nat64 = Nat64.fromNat(a % 2**64);
             let b1: Nat64 = Nat64.fromNat(b / 2**192);
             let b2: Nat64 = Nat64.fromNat((b / 2**128) % 2**64);
-            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**128);
-            let b4: Nat64 = Nat64.fromNat(b % 2**192);
+            let b3: Nat64 = Nat64.fromNat((b / 2**64) % 2**64);
+            let b4: Nat64 = Nat64.fromNat(b % 2**64);
             let result = Nat64.toNat(a1 ^ b1) * 2**192 + Nat64.toNat(a2 ^ b2) * 2**128 + Nat64.toNat(a3 ^ b3) * 2**64 + Nat64.toNat(a4 ^ b4);
             switch (exVar.stack.push(result)) {
               case (#err(e)) { return #err(e) };
