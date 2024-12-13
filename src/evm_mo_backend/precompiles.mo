@@ -7,11 +7,11 @@ import Option "mo:base/Option";
 import Buffer "mo:base/Buffer";
 import Iter "mo:base/Iter";
 import Result "mo:base/Result";
-import Ecdsa "mo:libsecp256k1/Ecdsa";
-import Signature "mo:libsecp256k1/Signature";
-import Message "mo:libsecp256k1/Message";
-import RecoveryId "mo:libsecp256k1/RecoveryId";
+import Debug "mo:base/Debug";
+import EvmTxsAddress "mo:evm-txs/Address";
+import ArrayUtils "mo:evm-txs/utils/ArrayUtils";
 import Ecmult "mo:libsecp256k1/core/ecmult";
+import PreG "pre_g";
 import Sha256 "mo:sha2/Sha256";
 import Sha3 "mo:sha3/";
 import Ripemd160 "mo:bitcoin/Ripemd160";
@@ -157,45 +157,29 @@ module {
         let r = Array.subArray<Nat8>(inputArray, 64, 32);
         let s = Array.subArray<Nat8>(inputArray, 96, 32);
         // Calculate result
-        // Modified from https://github.com/av1ctor/evm-txs.mo/blob/main/src/Address.mo
+        if (Array.subArray<Nat8>(v, 0, 31) != Array.freeze<Nat8>(Array.init<Nat8>(31, 0))) {
+            return ecRecoverError(exCon, exVar);
+        };
         let signature = Array.append<Nat8>(r, s);
         let recoveryId = v[31];
         let message = hash;
-        let context = Ecmult.ECMultContext(null);
-        var publicKeyArray = [] : [Nat8];
-        switch(Signature.parse_standard(signature)) {
-            case (#ok(signatureParsed)) {
-                switch(RecoveryId.parse(recoveryId)) {
-                    case (#ok(recoveryIdParsed)) {
-                        let messageParsed = Message.parse(message);
-                        switch(Ecdsa.recover_with_context(
-                            messageParsed, signatureParsed, recoveryIdParsed, context)) {
-                            case (#ok(publicKey)) {
-                                publicKeyArray := publicKey.serialize_compressed();
-                            };
-                            case (#err(msg)) {
-                                return ecRecoverError(exCon, exVar);
-                            };
-                        };
-                    };
-                    case (#err(msg)) {
-                        return ecRecoverError(exCon, exVar);
-                    };
-                };
+        let context = Ecmult.ECMultContext(?Ecmult.loadPreG(PreG.pre_g));
+        var addressArray = [] : [Nat8];
+        let response = EvmTxsAddress.recover(signature, recoveryId - 27, message, context);
+        switch (response) {
+            case (#ok(addr)) {
+                addressArray := ArrayUtils.fromText(addr);
             };
-            case (#err(msg)) {
+            case (#err(_)) {
                 return ecRecoverError(exCon, exVar);
             };
         };
-        var sha = Sha3.Keccak(256);
-        sha.update(publicKeyArray);
-        let keyHashArray = sha.finalize();
-        let addressArray = Array.subArray<Nat8>(keyHashArray, 12, 20);
         let zeroArray = Array.freeze<Nat8>(Array.init<Nat8>(12, 0));
         let result = Blob.fromArray(Array.append<Nat8>(zeroArray, addressArray));
         // Calculate gas
         let newGas: Int = exVar.totalGas - 3000;
         if (newGas < 0) {
+            Debug.print("out of gas");
             exVar.programCounter := exCon.code.size() + 2;
             exVar.totalGas := 0;
             return exVar;

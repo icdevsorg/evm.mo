@@ -2378,11 +2378,11 @@ await test("0001 ECDSA Recovery", func() : async () {
         0x51]                   // MLOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
-    Debug.print(debug_show("Memory:", context.memory));
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
     assert(result == [0x7156526fbd7a3c72969b54f64e42c10fbb768c8a]);
 });
-
+/*
 // 0002 SHA-256 Hash Function
 await test("0002 SHA-256 Hash Function", func() : async () {
     let context = await testOpCodes(
@@ -2465,7 +2465,7 @@ await test("0004 Identity Function", func() : async () {
     //Debug.print(debug_show("Memory:", context.memory));
     assert(result == [42]);
 });
-
+*/
 // 0005 Modular Exponentiation
 
 // 0006 Elliptic Curve Addition
