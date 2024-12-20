@@ -15,6 +15,7 @@ import PreG "pre_g";
 import Sha256 "mo:sha2/Sha256";
 import Sha3 "mo:sha3/";
 import Ripemd160 "mo:bitcoin/Ripemd160";
+import Bn128 "bn128";
 import T "types";
 
 module {
@@ -51,20 +52,6 @@ module {
             u := a1 + (m - q) * u % m;
         };
         return if (b == 1) a % m else 0; // Inverse exists only if greatest common denominator == 1
-    };
-
-    //modfied from https://forum.dfinity.org/t/reject-text-ic0503-canister-trapped-explicitly-bigint-function-error/26937/3
-    func modPow(b: Nat, e: Nat, m: Nat) : Nat {
-        var result: Nat = 1;
-        var b_ = b;
-        var e_ = e;
-        b_ := b_ % m;
-        while (e_ > 0){
-            if(e_ % 2 == 1) result := (result * b_) % m;
-            e_ := e_ / 2;
-            b_ := (b_ * b_) % m
-        };
-        return result;
     };
 
     func pointAdd(P: Point, Q: Point, p: Nat): Point {
@@ -114,6 +101,33 @@ module {
         };
     };
 
+    func ecPairingError(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionVariables {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+    };
+
+    func arrayToNat(arr: [Nat8]) : Nat {
+        var pos: Nat = arr.size();
+        var data: Nat = 0;
+        for (byte: Nat8 in arr.vals()) {
+            pos -= 1;
+            data += Nat8.toNat(byte) * (256 ** pos);
+        };
+        data
+    };
+
+    func bit_length(num: Nat) : Nat {
+        if (num == 0) { return 1; };
+        var bits = 0;
+        var num_ = num;
+        while (num_ > 0) {
+            num_ /= 2;
+            bits += 1;
+        };
+        bits
+    };
+
     // Pre-compiled contract functions
 
     let pc_00_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
@@ -151,7 +165,10 @@ module {
 
     let pc_01_ecRecover = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
         // Derive input data from calldata
-        let inputArray = Blob.toArray(exCon.calldata);
+        var inputArray = Blob.toArray(exCon.calldata);
+        if (inputArray.size() < 128) {
+            inputArray := Array.append<Nat8>(inputArray, Array.freeze<Nat8>(Array.init<Nat8>(inputArray.size() - 128, 0)));
+        };
         let hash = Array.subArray<Nat8>(inputArray, 0, 32);
         let v = Array.subArray<Nat8>(inputArray, 32, 32);
         let r = Array.subArray<Nat8>(inputArray, 64, 32);
@@ -252,22 +269,290 @@ module {
     };
 
     let pc_05_modexp = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
-        // Not completed yet
+        // Derive input data from calldata
+        var inputArray = Blob.toArray(exCon.calldata);
+        if (inputArray.size() < 96) {
+            inputArray := Array.append<Nat8>(inputArray, Array.freeze<Nat8>(Array.init<Nat8>(inputArray.size() - 96, 0)));
+        };
+        var BSize: Nat = 0;
+        var ESize: Nat = 0;
+        var MSize: Nat = 0;
+        var B: Nat = 0;
+        var E: Nat = 0;
+        var M: Nat = 0;
+        var pos: Nat = 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 0, 32).vals()) {
+          pos -= 1;
+          BSize += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 32, 32).vals()) {
+          pos -= 1;
+          ESize += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 64, 32).vals()) {
+          pos -= 1;
+          MSize += Nat8.toNat(byte) * (256 ** pos);
+        };
+        let expectedSize = 96 + BSize + ESize + MSize;
+        if (inputArray.size() < expectedSize) {
+            inputArray := Array.append<Nat8>(inputArray, Array.freeze<Nat8>(Array.init<Nat8>(inputArray.size() - expectedSize, 0)));
+        };
+        pos := BSize;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 96, BSize).vals()) {
+          pos -= 1;
+          B += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := ESize;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 96 + BSize, ESize).vals()) {
+          pos -= 1;
+          E += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := MSize;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 96 + BSize + ESize, MSize).vals()) {
+          pos -= 1;
+          M += Nat8.toNat(byte) * (256 ** pos);
+        };
+        // Calculate result
+        var result: Nat = 1;
+        var b_ = B;
+        var e_ = E;
+        b_ := b_ % M;
+        while (e_ > 0){
+            if (e_ % 2 == 1) result := (result * b_) % M;
+            e_ := e_ / 2;
+            b_ := (b_ * b_) % M;
+        };
+        Debug.print(debug_show("B:", B));
+        Debug.print(debug_show("E:", E));
+        Debug.print(debug_show("M:", M));
+        Debug.print(debug_show("Result:", result));
+        let resultBuffer = Buffer.Buffer<Nat8>(8);
+        for (i in Iter.revRange(MSize - 1, 0)) {
+            Debug.print(debug_show(Nat8.fromNat((result % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i)))));
+            resultBuffer.add(Nat8.fromNat((result % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        let resultBlob = Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
+        // Calculate gas
+        let max_length = Nat.max(BSize, MSize);
+        let words = (max_length + 7) / 8;
+        let multiplication_complexity = words ** 2;
+        var iteration_count = 0;
+        if (ESize <= 32 and E == 0) { iteration_count := 0; };
+        if (ESize <= 32 and E > 0) { iteration_count := bit_length(E) - 1 };
+        if (ESize > 32) { iteration_count := (8 * (ESize - 32)) + bit_length(Nat.min(E, 2**256 - 1) - 1) };
+        let calculate_iteration_count = Nat.max(iteration_count, 1);
+        let dynamic_gas = Nat.max(200, multiplication_complexity * calculate_iteration_count / 3);        
+        let newGas: Int = exVar.totalGas - dynamic_gas;
+        if (newGas < 0) {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+        } else {
+            exVar.totalGas := Int.abs(newGas);
+        };
+        // Place result in return data
+        exVar.returnData := Option.make(resultBlob);
         exVar
     };
 
     let pc_06_ecAdd = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
-        // Not completed yet
+        // Derive input data from calldata
+        var inputArray = Blob.toArray(exCon.calldata);
+        if (inputArray.size() < 128) {
+            inputArray := Array.append<Nat8>(inputArray, Array.freeze<Nat8>(Array.init<Nat8>(inputArray.size() - 128, 0)));
+        };
+        var x1: Nat = 0;
+        var y1: Nat = 0;
+        var x2: Nat = 0;
+        var y2: Nat = 0;
+        var pos: Nat = 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 0, 32).vals()) {
+          pos -= 1;
+          x1 += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 32, 32).vals()) {
+          pos -= 1;
+          y1 += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 64, 32).vals()) {
+          pos -= 1;
+          x2 += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 96, 32).vals()) {
+          pos -= 1;
+          y2 += Nat8.toNat(byte) * (256 ** pos);
+        };
+        // Calculate result
+        let P = Option.make((x1, y1));
+        let Q = Option.make((x2, y2));
+        let p = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+        let resultPoint = pointAdd(P, Q, p);
+        var x = 0;
+        var y = 0;
+        switch (resultPoint) {
+            case (?R) {
+                x := R.0;
+                y := R.1;
+            };
+            case (null) {}; // point at infinity
+        };
+        // Calculate gas
+        let newGas: Int = exVar.totalGas - 150;
+        if (newGas < 0) {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+        } else {
+            exVar.totalGas := Int.abs(newGas);
+        };
+        // Place result in return data
+        let resultBuffer = Buffer.Buffer<Nat8>(32);
+        for (i in Iter.revRange(31, 0)) {
+            resultBuffer.add(Nat8.fromNat((x % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        for (i in Iter.revRange(31, 0)) {
+            resultBuffer.add(Nat8.fromNat((y % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        let result = Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
+        exVar.returnData := Option.make(result);
         exVar
     };
 
     let pc_07_ecMul = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
-        // Not completed yet
+        // Derive input data from calldata
+        var inputArray = Blob.toArray(exCon.calldata);
+        if (inputArray.size() < 96) {
+            inputArray := Array.append<Nat8>(inputArray, Array.freeze<Nat8>(Array.init<Nat8>(inputArray.size() - 96, 0)));
+        };
+        var x1: Nat = 0;
+        var y1: Nat = 0;
+        var s: Nat = 0;
+        var pos: Nat = 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 0, 32).vals()) {
+          pos -= 1;
+          x1 += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 32, 32).vals()) {
+          pos -= 1;
+          y1 += Nat8.toNat(byte) * (256 ** pos);
+        };
+        pos := 32;
+        for (byte: Nat8 in Array.subArray<Nat8>(inputArray, 64, 32).vals()) {
+          pos -= 1;
+          s += Nat8.toNat(byte) * (256 ** pos);
+        };
+        // Calculate result
+        let P = Option.make((x1, y1));
+        let p = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+        let resultPoint = scalarMultiply(s, P, p);
+        var x = 0;
+        var y = 0;
+        switch (resultPoint) {
+            case (?Q) {
+                x := Q.0;
+                y := Q.1;
+            };
+            case (null) {}; // point at infinity
+        };
+        // Calculate gas
+        let newGas: Int = exVar.totalGas - 6000;
+        if (newGas < 0) {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+        } else {
+            exVar.totalGas := Int.abs(newGas);
+        };
+        // Place result in return data
+        let resultBuffer = Buffer.Buffer<Nat8>(32);
+        for (i in Iter.revRange(31, 0)) {
+            resultBuffer.add(Nat8.fromNat((x % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        for (i in Iter.revRange(31, 0)) {
+            resultBuffer.add(Nat8.fromNat((y % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
+        };
+        let result = Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
+        exVar.returnData := Option.make(result);
         exVar
     };
 
     let pc_08_ecPairing = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
-        // Not completed yet
+        // Get input data from calldata
+        let inputArray = Blob.toArray(exCon.calldata);
+        let inputLength = inputArray.size();
+        if (inputLength % 192 != 0) {
+            return ecPairingError(exCon, exVar);
+        };
+        // Calculate gas
+        let dynamic_gas = (inputLength / 192) * 34000;
+        let newGas: Int = exVar.totalGas - 45000 - dynamic_gas;
+        if (newGas < 0) {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+        } else {
+            exVar.totalGas := Int.abs(newGas);
+        };
+        // Calculate result
+        var x1 = 0; var y1 = 0; var x2_i = 0;
+        var x2_r = 0; var y2_i = 0; var y2_r = 0;
+        let field_modulus = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+        let curve_order = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+        var exponent = Bn128.FQ12_one;
+        var result = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00" : Blob;
+        for (i in Iter.range(0, inputLength / 192 - 1)) {
+            let startIndex = i * 192;
+            let x1_bytes = Array.subArray<Nat8>(inputArray, startIndex, 32);
+            let y1_bytes = Array.subArray<Nat8>(inputArray, startIndex + 32, 32);
+            let x2_i_bytes = Array.subArray<Nat8>(inputArray, startIndex + 64, 32);
+            let x2_r_bytes = Array.subArray<Nat8>(inputArray, startIndex + 96, 32);
+            let y2_i_bytes = Array.subArray<Nat8>(inputArray, startIndex + 128, 32);
+            let y2_r_bytes = Array.subArray<Nat8>(inputArray, startIndex + 160, 32);
+            x1 := arrayToNat(x1_bytes);
+            y1 := arrayToNat(y1_bytes);
+            x2_i := arrayToNat(x2_i_bytes);
+            x2_r := arrayToNat(x2_r_bytes);
+            y2_i := arrayToNat(y2_i_bytes);
+            y2_r := arrayToNat(y2_r_bytes);
+            for (val in Iter.fromArray([x1, y1, x2_i, x2_r, y2_i, y2_r])) {
+                if (val > field_modulus) {
+                    return ecPairingError(exCon, exVar);
+                };
+            };
+            var p1 = (1, 1, 0);
+            if (x1 != 0 or y1 != 0) {
+                p1 := (x1, y1, 1);
+                if (not Bn128.isOnCurve(p1, 3)) {
+                    return ecPairingError(exCon, exVar);
+                };
+            };
+            let fq2_x = [x2_r, x2_i];
+            let fq2_y = [y2_r, y2_i];
+            var p2 = (Bn128.FQ2_one, Bn128.FQ2_one, Bn128.FQ2_zero);
+            let b2 = Bn128.FQ2([3, 0]).div([9, 1]);
+            if (fq2_x != Bn128.FQ2_zero or fq2_y != Bn128.FQ2_zero) {
+                p2 := (fq2_x, fq2_y, Bn128.FQ2_one);
+                if (not Bn128.isOnCurveFq2(p2, b2)) {
+                    return ecPairingError(exCon, exVar);
+                }; // point not on curve
+            };
+            if (Bn128.multiply(p2, curve_order).2 != Bn128.FQ2_zero) {
+                return ecPairingError(exCon, exVar);
+            };
+            let pairing = Bn128.pairing(p2, p1, false);
+            exponent := Bn128.FQ12(exponent).mul(pairing);
+        };
+        if (Bn128.finalExponentiate(exponent) == Bn128.FQ12_one) {
+            result := "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\01";
+        };
+        // Place result in return data
+        exVar.returnData := Option.make(result);
         exVar
     };
 
