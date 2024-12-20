@@ -69,7 +69,7 @@ func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     );
     context;
 };
-/*
+
 // Basic Math and Bitwise Logic
 
 Debug.print(">");
@@ -482,28 +482,87 @@ await test("AND: 0xFF00FF & 0xF0F0F0", func() : async () {
     assert(result == [0xf000f0]);
 });
 
-// 17 OR
-await test("OR: 0xFF00FF | 0xF0F0F0", func() : async () {
+await test("AND: 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF & 0x00F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F0", func() : async () {
     let context = await testOpCodes(
-        [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
-        0x62, 0xF0, 0xF0, 0xF0,  // PUSH3 0xF0F0F0
+        [0x7f,                  // PUSH32 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x7f,                   // PUSH32 0x00F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F0
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x16]                    // AND
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    assert(result == [0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0]);
+});
+
+// 17 OR
+await test("OR: 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF | 0x00F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F0", func() : async () {
+    let context = await testOpCodes(
+        [0x7f,                  // PUSH32 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x7f,                   // PUSH32 0x00F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F0
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
         0x17]                    // OR
     );
     let result = context.stack;
     //Debug.print(debug_show(result));
-    assert(result == [0xfff0ff]);
+    assert(result == [0xfff0ff00fff0ff00fff0ff00fff0ff00fff0ff00fff0ff00fff0ff00fff0ff]);
 });
 
 // 18 XOR
-await test("XOR: 0xFF00FF ^ 0xF0F0F0", func() : async () {
+await test("XOR: 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF ^ 0x00F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F0", func() : async () {
     let context = await testOpCodes(
-        [0x62, 0xFF, 0x00, 0xFF, // PUSH3 0xFF00FF
-        0x62, 0xF0, 0xF0, 0xF0,  // PUSH3 0xF0F0F0
+        [0x7f,                  // PUSH32 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0xff, 0x00, 0xff,
+        0x7f,                   // PUSH32 0x00F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F000F0F0F0
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
+        0x00, 0xf0, 0xf0, 0xf0,
         0x18]                    // XOR
     );
     let result = context.stack;
     //Debug.print(debug_show(result));
-    assert(result == [0x0ff00f]);
+    assert(result == [0xff00f000ff00f000ff00f000ff00f000ff00f000ff00f000ff00f000ff00f]);
 });
 
 // 19 NOT
@@ -2314,7 +2373,7 @@ await test("KECCAK256: \\AB\\CD\\EF", func() : async () {
     //Debug.print(debug_show(result));
     assert(result == [0x800d501693feda2226878e1ec7869eef8919dbc5bd10c2bcd031b94d73492860]);
 });
-*/
+
 // Precompiled Contracts
 
 Debug.print(">");
@@ -2382,7 +2441,7 @@ await test("0001 ECDSA Recovery", func() : async () {
     //Debug.print(debug_show("Memory:", context.memory));
     assert(result == [0x7156526fbd7a3c72969b54f64e42c10fbb768c8a]);
 });
-/*
+
 // 0002 SHA-256 Hash Function
 await test("0002 SHA-256 Hash Function", func() : async () {
     let context = await testOpCodes(
@@ -2465,8 +2524,50 @@ await test("0004 Identity Function", func() : async () {
     //Debug.print(debug_show("Memory:", context.memory));
     assert(result == [42]);
 });
-*/
+
 // 0005 Modular Exponentiation
+await test("0005 Modular Exponentiation", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x60, 8,                // PUSH1 8 //BSize
+        0x60, 0,                // PUSH1 0
+        0x52,                   // MSTORE
+        0x60, 8,                // PUSH1 8 //ESize
+        0x60, 32,               // PUSH1 32
+        0x52,                   // MSTORE
+        0x60, 8,                // PUSH1 8 //MSize
+        0x60, 64,               // PUSH1 64
+        0x52,                   // MSTORE
+        0x7f,                   // PUSH32
+        0xd1, 0xff, 0xff, 0xff, // 0xD1FFFFFFFFFFD1D2FFFFFFFFFFD2D3FFFFFFFFFFFFD30000000000000000 // B, E, M
+        0xff, 0xff, 0xff, 0xd1, 
+        0xd2, 0xff, 0xff, 0xff, 
+        0xff, 0xff, 0xff, 0xd2, 
+        0xd3, 0xff, 0xff, 0xff, 
+        0xff, 0xff, 0xff, 0xd3, 
+        0x00, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x00,
+        0x60, 96,               // PUSH1 96
+        0x52,                   // MSTORE
+        //  Call function
+        0x60, 8,                // PUSH1 8 // retSize
+        0x60, 152,              // PUSH1 152 // retOffset
+        0x60, 120,              // PUSH1 120 // argsSize
+        0x60, 0,                // PUSH1 0 // argsOffset
+        0x60, 5,                // PUSH1 5 // address
+        0x61,                   // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,                   // STATICCALL
+        //  Put result on the stack
+        0x50,                   // POP
+        0x60, 128,              // PUSH1 128
+        0x51]                   // MLOAD
+    );
+    let result = context.stack;
+    Debug.print(debug_show(result));
+    Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [0x615681083ce56c47]);
+});
 
 // 0006 Elliptic Curve Addition
 
