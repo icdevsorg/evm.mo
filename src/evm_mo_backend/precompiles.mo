@@ -1,5 +1,6 @@
 import Int "mo:base/Int";
 import Nat8 "mo:base/Nat8";
+import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Blob "mo:base/Blob";
 import Array "mo:base/Array";
@@ -16,6 +17,7 @@ import Sha256 "mo:sha2/Sha256";
 import Sha3 "mo:sha3/";
 import Ripemd160 "mo:bitcoin/Ripemd160";
 import Bn128 "bn128";
+import Blake2 "blake2";
 import T "types";
 
 module {
@@ -107,6 +109,12 @@ module {
             return exVar;
     };
 
+    func blake2fError(exCon: T.ExecutionContext, exVar: T.ExecutionVariables) : T.ExecutionVariables {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+    };
+
     func arrayToNat(arr: [Nat8]) : Nat {
         var pos: Nat = arr.size();
         var data: Nat = 0;
@@ -115,6 +123,20 @@ module {
             data += Nat8.toNat(byte) * (256 ** pos);
         };
         data
+    };
+
+    func arrayN8toN64(arr: [Nat8]) : [Nat64] {
+        var output = [] : [Nat64];
+        if (arr.size() < 8) { () };
+        for (i in Iter.range(0, arr.size() / 8 - 1)) {
+            let subarr = Array.subArray<Nat8>(arr, i * 8, 8);
+            var x = 0;
+            for (j in Iter.range(0, 7)) {
+                x += Nat8.toNat(subarr[j]) * 256 ** (7 - j);
+            };
+            output := Array.append<Nat64>(output, [Nat64.fromNat(x)]);
+        };
+        output
     };
 
     func bit_length(num: Nat) : Nat {
@@ -557,7 +579,39 @@ module {
     };
 
     let pc_09_blake2f = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
-        // Not completed yet
+        var inputArray = Blob.toArray(exCon.calldata);
+        if (inputArray.size() != 213) {
+            return blake2fError(exCon, exVar);
+        };
+        let rounds = arrayToNat(Array.subArray<Nat8>(inputArray, 0, 4));
+        let hArr = Array.subArray<Nat8>(inputArray, 4, 64);
+        let h = arrayN8toN64(hArr);
+        let mArr = Array.subArray<Nat8>(inputArray, 68, 128);
+        let m = arrayN8toN64(mArr);
+        let tArr = Array.subArray<Nat8>(inputArray, 96, 32);
+        let t = arrayN8toN64(tArr);
+        let f = inputArray[212];
+        // Calculate result
+        let resultArrN64 = Blake2.F(rounds, h, m, t, f);
+        // Calculate gas
+        let newGas: Int = exVar.totalGas - rounds;
+        if (newGas < 0) {
+            exVar.programCounter := exCon.code.size() + 2;
+            exVar.totalGas := 0;
+            return exVar;
+        } else {
+            exVar.totalGas := Int.abs(newGas);
+        };
+        // Place result in return data
+        let resultBuffer = Buffer.Buffer<Nat8>(8);
+        for (i in Iter.range(0,7)) {
+            let val = Nat64.toNat(resultArrN64[i]);
+            for (j in Iter.range(0,7)) {
+                resultBuffer.add(Nat8.fromNat(val / 256 ** (7 - j) % 256));
+            };
+        };
+        let result = Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
+        exVar.returnData := Option.make(result);
         exVar
     };
 
