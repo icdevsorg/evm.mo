@@ -1,12 +1,12 @@
 [dependencies]
-base = "0.11.0"
-vector = "0.3.1"
+base = "0.13.5"
+vector = "0.4.1"
 map = "9.0.1"
 rlp-motoko = "https://github.com/relaxed04/rlp-motoko#master@16ee578b1315dd160718f1379a7e20c1f33c7d0d"
 sha2 = "0.1.0"
 merkle-patricia-trie = "1.0.0"
 sha3 = "0.1.1"
-bitcoin = "0.1.0"
+bitcoin = "0.1.1"
 libsecp256k1 = "0.1.0"
 evm-txs = "0.1.3"
 

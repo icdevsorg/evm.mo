@@ -249,7 +249,8 @@ module {
     if (codeAddress > 0 and codeAddress < 10) {
       let codeOutput = callPreCompile[codeAddress](subExCon, subExVar, engineInstance);
       if (codeOutput.programCounter > Array.size(subExCon.code) + 1) {
-        Debug.print("Insufficient gas for precompiled contract call");
+        Debug.print("Precompile contract call failed");
+        //Debug.print("Insufficient gas for precompiled contract call");
       };
       let gasSpent = gas - codeOutput.totalGas;
       if (codeOutput.gasRefund > gasSpent / 5) {
@@ -2126,7 +2127,8 @@ module {
             if (offset + 32 > memory_byte_size) {
               let new_memory_size_word = (offset + 32 + 31) / 32;
               let new_memory_byte_size = new_memory_size_word * 32;
-              Vec.addMany(exVar.memory, 32, Nat8.fromNat(0));
+              let mem_incr = new_memory_byte_size - memory_byte_size;
+              Vec.addMany(exVar.memory, mem_incr, Nat8.fromNat(0));
               new_memory_cost := (new_memory_size_word ** 2) / 512 + (3 * new_memory_size_word);
             };
             Vec.put(exVar.memory, offset, valueMod);

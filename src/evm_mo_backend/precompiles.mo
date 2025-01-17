@@ -346,13 +346,8 @@ module {
             e_ := e_ / 2;
             b_ := (b_ * b_) % M;
         };
-        Debug.print(debug_show("B:", B));
-        Debug.print(debug_show("E:", E));
-        Debug.print(debug_show("M:", M));
-        Debug.print(debug_show("Result:", result));
         let resultBuffer = Buffer.Buffer<Nat8>(8);
         for (i in Iter.revRange(MSize - 1, 0)) {
-            Debug.print(debug_show(Nat8.fromNat((result % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i)))));
             resultBuffer.add(Nat8.fromNat((result % (256 ** Int.abs(i+1))) / (256 ** Int.abs(i))));
         };
         let resultBlob = Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));
@@ -412,7 +407,7 @@ module {
         // Calculate result
         let P = Option.make((x1, y1));
         let Q = Option.make((x2, y2));
-        let p = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+        let p = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
         let resultPoint = pointAdd(P, Q, p);
         var x = 0;
         var y = 0;
@@ -471,7 +466,7 @@ module {
         };
         // Calculate result
         let P = Option.make((x1, y1));
-        let p = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+        let p = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
         let resultPoint = scalarMultiply(s, P, p);
         var x = 0;
         var y = 0;
@@ -515,6 +510,8 @@ module {
         let dynamic_gas = (inputLength / 192) * 34000;
         let newGas: Int = exVar.totalGas - 45000 - dynamic_gas;
         if (newGas < 0) {
+            Debug.print(debug_show("totalGas:", exVar.totalGas));
+            Debug.print(debug_show("newGas:", newGas));
             exVar.programCounter := exCon.code.size() + 2;
             exVar.totalGas := 0;
             return exVar;
@@ -544,6 +541,7 @@ module {
             y2_r := arrayToNat(y2_r_bytes);
             for (val in Iter.fromArray([x1, y1, x2_i, x2_r, y2_i, y2_r])) {
                 if (val > field_modulus) {
+                    Debug.print("error 1");
                     return ecPairingError(exCon, exVar);
                 };
             };
@@ -551,6 +549,7 @@ module {
             if (x1 != 0 or y1 != 0) {
                 p1 := (x1, y1, 1);
                 if (not Bn128.isOnCurve(p1, 3)) {
+                    Debug.print("error 2");
                     return ecPairingError(exCon, exVar);
                 };
             };
@@ -561,10 +560,12 @@ module {
             if (fq2_x != Bn128.FQ2_zero or fq2_y != Bn128.FQ2_zero) {
                 p2 := (fq2_x, fq2_y, Bn128.FQ2_one);
                 if (not Bn128.isOnCurveFq2(p2, b2)) {
+                    Debug.print("error 3 - point not on curve");
                     return ecPairingError(exCon, exVar);
                 }; // point not on curve
             };
             if (Bn128.multiply(p2, curve_order).2 != Bn128.FQ2_zero) {
+                Debug.print("error 4");
                 return ecPairingError(exCon, exVar);
             };
             let pairing = Bn128.pairing(p2, p1, false);

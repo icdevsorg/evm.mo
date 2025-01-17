@@ -27,14 +27,14 @@ let dummyTransaction: T.Transaction = {
     caller = "\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa\00\aa";
     nonce = 2;
     gasPriceTx = 5;
-    gasLimitTx = 100_000;
+    gasLimitTx = 1_100_000;
     callee = "\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb\00\bb";
     incomingEth = 123;
     dataTx = "\01\23\45\67\89\ab\cd\ef";
 };
 
 let dummyCallerState: T.CallerState = {
-    balance = 550_000;
+    balance = 11_550_000;
     nonce = 1;
     code = [];
     storage = Trie.empty();
@@ -2564,14 +2564,83 @@ await test("0005 Modular Exponentiation", func() : async () {
         0x51]                   // MLOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
-    Debug.print(debug_show("Memory:", context.memory));
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
     assert(result == [0x615681083ce56c47]);
 });
 
 // 0006 Elliptic Curve Addition
+await test("0006 Elliptic Curve Addition", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x60, 1,   // PUSH1 1 // x1
+        0x60, 0,   // PUSH1 0
+        0x52,      // MSTORE
+        0x60, 2,   // PUSH1 2 // y1
+        0x60, 32,  // PUSH1 32
+        0x52,      // MSTORE
+        0x60, 1,   // PUSH1 1 // x2
+        0x60, 64,  // PUSH1 64
+        0x52,      // MSTORE
+        0x60, 2,   // PUSH1 2 // y2
+        0x60, 96,  // PUSH1 96
+        0x52,      // MSTORE
+        //  Call function
+        0x60, 64,  // PUSH1 64 // retSize
+        0x60, 128, // PUSH1 128 // retOffset
+        0x60, 128, // PUSH1 128 // argsSize
+        0x60, 0,   // PUSH1 0 // argsOffset
+        0x60, 6,   // PUSH1 6 // address
+        0x61,      // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,      // STATICCALL
+        //  Put result on the stack
+        0x50,      // POP
+        0x60, 160, // PUSH1 160
+        0x51,      // MLOAD
+        0x60, 128, // PUSH1 128
+        0x51]      // MLOAD
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [0x15ed738c0e0a7c92e7845f96b2ae9c0a68a6a449e3538fc7ff3ebf7a5a18a2c4, 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd3]);
+});
 
 // 0007 Elliptic Curve Scalar Multiplication
+await test("0007 Elliptic Curve Scalar Multiplication", func() : async () {
+    let context = await testOpCodes(
+        [// Place parameters in memory
+        0x60, 1,   // PUSH1 1 // x1
+        0x60, 0,   // PUSH1 0
+        0x52,      // MSTORE
+        0x60, 2,   // PUSH1 2 // y1
+        0x60, 32,  // PUSH1 32
+        0x52,      // MSTORE
+        0x60, 2,   // PUSH1 2 // x2
+        0x60, 64,  // PUSH1 64
+        0x52,      // MSTORE
+        //  Call function
+        0x60, 64,  // PUSH1 64 // retSize
+        0x60, 96,  // PUSH1 96 // retOffset
+        0x60, 96,  // PUSH1 96 // argsSize
+        0x60, 0,   // PUSH1 0 // argsOffset
+        0x60, 7,   // PUSH1 7 // address
+        0x61,      // PUSH2 0xFFFF // gas
+        0xff, 0xff, 
+        0xfa,      // STATICCALL
+        //  Put result on the stack
+        0x50,      // POP
+        0x60, 128, // PUSH1 128
+        0x51,      // MLOAD
+        0x60, 96,  // PUSH1 96
+        0x51]      // MLOAD
+    );
+    let result = context.stack;
+    //Debug.print(debug_show(result));
+    //Debug.print(debug_show("Memory:", context.memory));
+    assert(result == [0x15ed738c0e0a7c92e7845f96b2ae9c0a68a6a449e3538fc7ff3ebf7a5a18a2c4, 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd3]);
+});
 
 // 0008 Elliptic Curve Pairing Check
 

@@ -2,6 +2,7 @@ import Nat "mo:base/Nat";
 import Int "mo:base/Int";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
+import Debug "mo:base/Debug";
 
 module {
 
@@ -246,7 +247,9 @@ module {
       var high = Array.append<Int>(modulusCoeffs, [1]);
 
       while (deg(low) > 0) {
-        let r = polyRoundedDiv(high, low);
+        let r_ = polyRoundedDiv(high, low);
+        let extra = degree + 1 - r_.size();
+        let r = Array.append<Nat>(r_, Array.freeze<Nat>(Array.init<Nat>(extra, 0)));
         var nm = hm;
         var newLow = Array.thaw<Int>(high);
 
@@ -398,7 +401,9 @@ module {
       var high = Array.append<Int>(modulusCoeffs, [1]);
 
       while (deg(low) > 0) {
-        let r = polyRoundedDiv(high, low);
+        let r_ = polyRoundedDiv(high, low);
+        let extra = degree + 1 - r_.size();
+        let r = Array.append<Nat>(r_, Array.freeze<Nat>(Array.init<Nat>(extra, 0)));
         var nm = hm;
         var newLow = Array.thaw<Int>(high);
 
