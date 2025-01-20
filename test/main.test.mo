@@ -1028,7 +1028,7 @@ await test("SELFBALANCE", func() : async () {
     );
     let result = context.stack;
     //Debug.print(debug_show(result));
-    assert(result == [550000 - 100000 * 5 - 123]);
+    assert(result == [11550000 - 1100000 * 5 - 123]);
 });
 
 // 48 BASEFEE
@@ -1194,7 +1194,7 @@ await test("GAS", func() : async () {
     );
     let result = context.stack;
     //Debug.print(debug_show(result));
-    assert(result == [0, 100000 - 2 - 2]);
+    assert(result == [0, 1100000 - 2 - 2]);
 });
 
 // 5B JUMPDEST

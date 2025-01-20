@@ -2125,7 +2125,7 @@ module {
             let memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word);
             var new_memory_cost = memory_cost;
             if (offset + 32 > memory_byte_size) {
-              let new_memory_size_word = (offset + 32 + 31) / 32;
+              let new_memory_size_word = (offset + 32) / 32;
               let new_memory_byte_size = new_memory_size_word * 32;
               let mem_incr = new_memory_byte_size - memory_byte_size;
               Vec.addMany(exVar.memory, mem_incr, Nat8.fromNat(0));
