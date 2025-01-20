@@ -1,3 +1,6 @@
+// Modified from https://github.com/ethereum/py_pairing/tree/master/py_ecc/optimized_bn128
+// and https://github.com/ethereum/py-evm/blob/main/eth/precompiles/ecpairing.py
+
 import Nat "mo:base/Nat";
 import Int "mo:base/Int";
 import Array "mo:base/Array";
@@ -14,6 +17,14 @@ module {
   public let FQ2_zero: [Int] = [0, 0];
   public let FQ12_one: [Int] = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   public let FQ12_zero: [Int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  func dupMut(arr: [var Int]) : [var Int] {
+    Array.thaw<Int>(Array.map<Int, Int>(Array.freeze<Int>(arr), func x = x))
+  };
+
+  func dupImm(arr: [Int]) : [Int] {
+    Array.map<Int, Int>(arr, func x = x)
+  };
 
   // FIELD ELEMENTS
   let fieldModulus = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
@@ -58,7 +69,7 @@ module {
       o[Int.abs(i)] := Int.abs(coeff);
 
       for (c in Iter.range(0, degb)) {
-        temp[c + Int.abs(i)] := (temp[c + Int.abs(i)] - coeff * b[c]) % fieldModulus;
+        temp[c + Int.abs(i)] := (temp[c + Int.abs(i)] - o[c]) % fieldModulus; //coeff * b[c]) % fieldModulus;
       };
     };
     let o_ = Array.freeze<Nat>(o);
@@ -153,19 +164,20 @@ module {
     };
 
     public func mul(other: Fq2): Fq2 {
-      var b = Array.init<Int>(degree * 2 - 1, 0);
+      var b = Array.init<Int>(3, 0);
       for (i in Iter.range(0, coeffs.size() - 1)) {
         for (j in Iter.range(0, other.size() - 1)) {
           b[i + j] += coeffs[i] * other[j];
         };
       };
 
-      for (exp in Iter.revRange(degree - 2, 0)) { // Degree reduction
+      /*for (exp in Iter.revRange(degree - 2, 0)) { // Degree reduction
         let top = b[degree + Int.abs(exp)];
         for ((i, c) in mcTuples.vals()) {
           b[Int.abs(exp + i)] -= top * c;
         };
-      };
+      };*/
+      b[0] -= b[2];
 
       let newCoeffs = Array.tabulate<Int>(
         degree,
@@ -241,8 +253,8 @@ module {
 
     // Modular inverse (using extended Euclidean algorithm)
     public func inv(): Fq2 {
-      var lm = Array.init<Int>(degree + 1, 0); lm[0] := 1;
-      var hm = Array.init<Int>(degree + 1, 0);
+      var lm = Array.init<Int>(3, 0); lm[0] := 1;
+      var hm = Array.init<Int>(3, 0);
       var low = Array.append<Int>(coeffs, [0]);
       var high = Array.append<Int>(modulusCoeffs, [1]);
 
@@ -250,7 +262,7 @@ module {
         let r_ = polyRoundedDiv(high, low);
         let extra = degree + 1 - r_.size();
         let r = Array.append<Nat>(r_, Array.freeze<Nat>(Array.init<Nat>(extra, 0)));
-        var nm = hm;
+        var nm = dupMut(hm);
         var newLow = Array.thaw<Int>(high);
 
         for (i in Iter.range(0, degree)) {
@@ -260,10 +272,10 @@ module {
           };
         };
 
-        lm := nm;
+        lm := dupMut(nm);
         low := Array.freeze<Int>(newLow);
-        high := low;
-        hm := lm;
+        high := dupImm(low);
+        hm := dupMut(lm);
       };
 
       return FQ2(Array.subArray<Int>(Array.freeze<Int>(lm), 0, degree)).scalarMul(primeFieldInv(low[0], fieldModulus));
@@ -404,7 +416,7 @@ module {
         let r_ = polyRoundedDiv(high, low);
         let extra = degree + 1 - r_.size();
         let r = Array.append<Nat>(r_, Array.freeze<Nat>(Array.init<Nat>(extra, 0)));
-        var nm = hm;
+        var nm = dupMut(hm);
         var newLow = Array.thaw<Int>(high);
 
         for (i in Iter.range(0, degree)) {
@@ -414,10 +426,10 @@ module {
           };
         };
 
-        lm := nm;
+        lm := dupMut(nm);
         low := Array.freeze<Int>(newLow);
-        high := low;
-        hm := lm;
+        high := dupImm(low);
+        hm := dupMut(lm);
       };
 
       return FQ12(Array.subArray<Int>(Array.freeze<Int>(lm), 0, degree)).scalarMul(primeFieldInv(low[0], fieldModulus));
