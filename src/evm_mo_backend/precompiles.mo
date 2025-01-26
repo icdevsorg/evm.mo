@@ -510,8 +510,6 @@ module {
         let dynamic_gas = (inputLength / 192) * 34000;
         let newGas: Int = exVar.totalGas - 45000 - dynamic_gas;
         if (newGas < 0) {
-            Debug.print(debug_show("totalGas:", exVar.totalGas));
-            Debug.print(debug_show("newGas:", newGas));
             exVar.programCounter := exCon.code.size() + 2;
             exVar.totalGas := 0;
             return exVar;
@@ -524,6 +522,10 @@ module {
         let field_modulus = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
         let curve_order = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
         var exponent = Bn128.FQ12_one;
+        let b2 = [
+            19485874751759354771024239261021720505790618469301721065564631296452457478373,
+            266929791119991161246907387137283842545076965332900288569378510910307636690
+        ];
         var result = "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00" : Blob;
         for (i in Iter.range(0, inputLength / 192 - 1)) {
             let startIndex = i * 192;
@@ -541,7 +543,7 @@ module {
             y2_r := arrayToNat(y2_r_bytes);
             for (val in Iter.fromArray([x1, y1, x2_i, x2_r, y2_i, y2_r])) {
                 if (val > field_modulus) {
-                    Debug.print("error 1");
+                    Debug.print("Point co-ordinate exceeds field modulus");
                     return ecPairingError(exCon, exVar);
                 };
             };
@@ -549,24 +551,19 @@ module {
             if (x1 != 0 or y1 != 0) {
                 p1 := (x1, y1, 1);
                 if (not Bn128.isOnCurve(p1, 3)) {
-                    Debug.print("error 2");
+                    Debug.print("Point 1 is not on curve");
                     return ecPairingError(exCon, exVar);
                 };
             };
             let fq2_x = [x2_r, x2_i];
             let fq2_y = [y2_r, y2_i];
             var p2 = (Bn128.FQ2_one, Bn128.FQ2_one, Bn128.FQ2_zero);
-            let b2 = Bn128.FQ2([3, 0]).div([9, 1]);
             if (fq2_x != Bn128.FQ2_zero or fq2_y != Bn128.FQ2_zero) {
                 p2 := (fq2_x, fq2_y, Bn128.FQ2_one);
                 if (not Bn128.isOnCurveFq2(p2, b2)) {
-                    Debug.print("error 3 - point not on curve");
+                    Debug.print("Point 2 is not on curve");
                     return ecPairingError(exCon, exVar);
-                }; // point not on curve
-            };
-            if (Bn128.multiply(p2, curve_order).2 != Bn128.FQ2_zero) {
-                Debug.print("error 4");
-                return ecPairingError(exCon, exVar);
+                };
             };
             let pairing = Bn128.pairing(p2, p1, false);
             exponent := Bn128.FQ12(exponent).mul(pairing);

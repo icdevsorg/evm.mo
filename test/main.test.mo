@@ -2676,8 +2676,9 @@ await test("0008 Elliptic Curve Pairing Check", func() : async () {
         0x91, 0xe6, 0x6f, 0x59, 0xbe, 0x6b, 0xd7, 0x63, 0x95, 0x0b, 0xb1, 0x60, 0x41, 0xa0, 0xa8, 0x5e,	
         0x60, 0xa0, // PUSH1 160
         0x52,       // MSTORE
-        0x60,       // PUSH1 1 // x1_2
-        1,	
+        0x7f,       // PUSH32 1 // x1_2
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
         0x60, 0xc0, // PUSH1 192
         0x52,       // MSTORE
         0x7f,       // PUSH32 ... // y1_2
@@ -2727,10 +2728,9 @@ await test("0008 Elliptic Curve Pairing Check", func() : async () {
         0x51]       // MLOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     //Debug.print(debug_show("Memory:", context.memory));
-    let testpass = (result == [1]);
-    Debug.print(debug_show("TEST PASS:", testpass));
+    assert(result == [1]);
 });
 
 // 0009 Blake2 Compression Function F
@@ -2803,6 +2803,6 @@ await test("0009 Blake2 Compression Function F", func() : async () {
 });
 
 Debug.print(".");
-Debug.print("Note that the output has been modified for the last 2 tests");
+Debug.print("Note that the output has been modified for the last test");
 Debug.print("in order to ensure that an output is displayed. The result");
 Debug.print("for \"TEST PASS\" shows whether the test has really passed or not.");

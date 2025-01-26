@@ -18,14 +18,6 @@ module {
   public let FQ12_one: [Int] = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   public let FQ12_zero: [Int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-  func dupMut(arr: [var Int]) : [var Int] {
-    Array.thaw<Int>(Array.map<Int, Int>(Array.freeze<Int>(arr), func x = x))
-  };
-
-  func dupImm(arr: [Int]) : [Int] {
-    Array.map<Int, Int>(arr, func x = x)
-  };
-
   // FIELD ELEMENTS
   let fieldModulus = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
 
@@ -47,7 +39,7 @@ module {
       high := low;
       low := new;
     };
-    return Int.abs(lm % n);
+    return Int.abs((lm % n + n) % n);
   };
 
   // Utility functions for polynomial operations
@@ -66,7 +58,7 @@ module {
 
     for (i in Iter.revRange(dega - degb, 0)) {
       let coeff = (temp[degb + Int.abs(i)] * primeFieldInv(b[degb], fieldModulus)) % fieldModulus;
-      o[Int.abs(i)] := Int.abs(coeff);
+      o[Int.abs(i)] := (o[Int.abs(i)] + Int.abs(coeff)) % fieldModulus;
 
       for (c in Iter.range(0, degb)) {
         temp[c + Int.abs(i)] := (temp[c + Int.abs(i)] - o[c]) % fieldModulus; //coeff * b[c]) % fieldModulus;
@@ -125,10 +117,6 @@ module {
     public func ne(other: Fq): Bool {
       return value != (other % fieldModulus);
     };
-
-    public func repr(): Text {
-      return Nat.toText(value);
-    };
   };
 
   // The quadratic extension field
@@ -157,7 +145,7 @@ module {
       let newCoeffs = Array.tabulate<Int>(
         degree,
         func(i: Nat): Int {
-          (coeffs[i] - other[i]) % fieldModulus
+          ((coeffs[i] - other[i]) % fieldModulus + fieldModulus) % fieldModulus
         }
       );
       return newCoeffs;
@@ -171,18 +159,12 @@ module {
         };
       };
 
-      /*for (exp in Iter.revRange(degree - 2, 0)) { // Degree reduction
-        let top = b[degree + Int.abs(exp)];
-        for ((i, c) in mcTuples.vals()) {
-          b[Int.abs(exp + i)] -= top * c;
-        };
-      };*/
       b[0] -= b[2];
 
       let newCoeffs = Array.tabulate<Int>(
         degree,
         func(i: Nat): Int {
-          b[i] % fieldModulus
+          (b[i] % fieldModulus + fieldModulus) % fieldModulus
         }
       );
 
@@ -195,7 +177,7 @@ module {
       let newCoeffs = Array.map<Int, Int>(
         coeffs,
         func(c: Int): Int {
-          (c * scalarInv) % fieldModulus;
+          ((c * scalarInv) % fieldModulus + fieldModulus) % fieldModulus;
         }
       );
       return newCoeffs;
@@ -210,7 +192,7 @@ module {
       let newCoeffs = Array.map<Int, Int>(
         coeffs,
         func(c: Int): Int {
-          (c * scalar) % fieldModulus;
+          ((c * scalar) % fieldModulus + fieldModulus) % fieldModulus;
         }
       );
       return newCoeffs;
@@ -245,7 +227,7 @@ module {
       let newCoeffs = Array.map<Int, Int>(
         coeffs,
         func(c: Int): Int {
-          (-c) % fieldModulus;
+          ((-c) % fieldModulus + fieldModulus) % fieldModulus;
         }
       );
       return newCoeffs;
@@ -262,7 +244,7 @@ module {
         let r_ = polyRoundedDiv(high, low);
         let extra = degree + 1 - r_.size();
         let r = Array.append<Nat>(r_, Array.freeze<Nat>(Array.init<Nat>(extra, 0)));
-        var nm = dupMut(hm);
+        var nm = hm;
         var newLow = Array.thaw<Int>(high);
 
         for (i in Iter.range(0, degree)) {
@@ -272,21 +254,13 @@ module {
           };
         };
 
-        lm := dupMut(nm);
+        hm := lm;
+        high := low;
+        lm := nm;
         low := Array.freeze<Int>(newLow);
-        high := dupImm(low);
-        hm := dupMut(lm);
       };
 
-      return FQ2(Array.subArray<Int>(Array.freeze<Int>(lm), 0, degree)).scalarMul(primeFieldInv(low[0], fieldModulus));
-    };
-
-    public func repr(): Text {
-      return "FQ2(" # debugShowCoeffs() # ")";
-    };
-
-    private func debugShowCoeffs(): Text {
-      Array.foldLeft<Int, Text>(coeffs, "", func(acc, c) = acc # " " # Int.toText(c));
+      return FQ2(Array.subArray<Int>(Array.freeze<Int>(lm), 0, degree)).scalarDiv(low[0]);
     };
   };
 
@@ -312,7 +286,7 @@ module {
       let newCoeffs = Array.tabulate<Int>(
         degree,
         func(i: Nat): Int {
-          (coeffs[i] - other[i]) % fieldModulus
+          ((coeffs[i] - other[i]) % fieldModulus + fieldModulus) % fieldModulus
         }
       );
       return newCoeffs;
@@ -336,20 +310,20 @@ module {
       let newCoeffs = Array.tabulate<Int>(
         degree,
         func(i: Nat): Int {
-          b[i] % fieldModulus
+          (b[i] % fieldModulus + fieldModulus) % fieldModulus
         }
       );
 
       return newCoeffs;
     };
 
-    public func scalarDiv(scalar: Int): Fq2 {
+    public func scalarDiv(scalar: Int): Fq12 {
       // Scalar division: multiply by modular inverse of scalar
       let scalarInv = primeFieldInv(scalar, fieldModulus);
       let newCoeffs = Array.map<Int, Int>(
         coeffs,
         func(c: Int): Int {
-          (c * scalarInv) % fieldModulus;
+          ((c * scalarInv) % fieldModulus + fieldModulus) % fieldModulus;
         }
       );
       return newCoeffs;
@@ -364,7 +338,7 @@ module {
       let newCoeffs = Array.map<Int, Int>(
         coeffs,
         func(c: Int): Int {
-          (c * scalar) % fieldModulus;
+          ((c * scalar) % fieldModulus + fieldModulus) % fieldModulus;
         }
       );
       return newCoeffs;
@@ -399,7 +373,7 @@ module {
       let newCoeffs = Array.map<Int, Int>(
         coeffs,
         func(c: Int): Int {
-          (-c) % fieldModulus;
+          ((-c) % fieldModulus + fieldModulus) % fieldModulus;
         }
       );
       return newCoeffs;
@@ -416,31 +390,23 @@ module {
         let r_ = polyRoundedDiv(high, low);
         let extra = degree + 1 - r_.size();
         let r = Array.append<Nat>(r_, Array.freeze<Nat>(Array.init<Nat>(extra, 0)));
-        var nm = dupMut(hm);
+        var nm = hm;
         var newLow = Array.thaw<Int>(high);
 
         for (i in Iter.range(0, degree)) {
           for (j in Iter.range(0, degree - i)) {
-            nm[i + j] := (nm[i + j] - lm[i] * r[j]) % fieldModulus;
-            newLow[i + j] := (newLow[i + j] - low[i] * r[j]) % fieldModulus;
+            nm[i + j] := ((nm[i + j] - lm[i] * r[j]) % fieldModulus + fieldModulus) % fieldModulus;
+            newLow[i + j] := ((newLow[i + j] - low[i] * r[j]) % fieldModulus + fieldModulus) % fieldModulus;
           };
         };
 
-        lm := dupMut(nm);
+        hm := lm;
+        high := low;
+        lm := nm;
         low := Array.freeze<Int>(newLow);
-        high := dupImm(low);
-        hm := dupMut(lm);
       };
 
-      return FQ12(Array.subArray<Int>(Array.freeze<Int>(lm), 0, degree)).scalarMul(primeFieldInv(low[0], fieldModulus));
-    };
-
-    public func repr(): Text {
-      return "FQ12(" # debugShowCoeffs() # ")";
-    };
-
-    private func debugShowCoeffs(): Text {
-      Array.foldLeft<Int, Text>(coeffs, "", func(acc, c) = acc # " " # Int.toText(c));
+      return FQ12(Array.subArray<Int>(Array.freeze<Int>(lm), 0, degree)).scalarDiv(low[0]);
     };
   };
 
@@ -500,7 +466,7 @@ module {
     return (newX, newY, newZ);
   };
 
-  // Elliptic curve point doubling for FQ2 (or FQ12)
+  // Elliptic curve point doubling for FQ2
   public func doubleFq2(pt: (Fq2, Fq2, Fq2)): (Fq2, Fq2, Fq2) {
     let (x, y, z) = pt;
     let W = FQ2(FQ2(x).pow(2)).scalarMul(3); // 3 * (x ** 2);
@@ -511,6 +477,20 @@ module {
     let newX = FQ2(FQ2(H).mul(S)).scalarMul(2); //2 * H * S;
     let newY = FQ2(FQ2(W).mul(FQ2(FQ2(B).scalarMul(4)).sub(H))).sub(FQ2(FQ2(FQ2(y).pow(2)).mul(S_squared)).scalarMul(8)); //W * (4 * B - H) - 8 * (y ** 2) * S_squared;
     let newZ = FQ2(FQ2(S).mul(S_squared)).scalarMul(8); //8 * S * S_squared;
+    return (newX, newY, newZ);
+  };
+
+  // Elliptic curve point doubling for FQ12
+  public func doubleFq12(pt: (Fq12, Fq12, Fq12)): (Fq12, Fq12, Fq12) {
+    let (x, y, z) = pt;
+    let W = FQ12(FQ12(x).pow(2)).scalarMul(3); // 3 * (x ** 2);
+    let S = FQ12(y).mul(z); //y * z;
+    let B = FQ12(FQ12(x).mul(y)).mul(S); //x * y * S;
+    let H = FQ12(FQ12(W).pow(2)).sub(FQ12(B).scalarMul(8)); //(W ** 2) - 8 * B;
+    let S_squared = FQ12(S).pow(2); //S ** 2;
+    let newX = FQ12(FQ12(H).mul(S)).scalarMul(2); //2 * H * S;
+    let newY = FQ12(FQ12(W).mul(FQ12(FQ12(B).scalarMul(4)).sub(H))).sub(FQ12(FQ12(FQ12(y).pow(2)).mul(S_squared)).scalarMul(8)); //W * (4 * B - H) - 8 * (y ** 2) * S_squared;
+    let newZ = FQ12(FQ12(S).mul(S_squared)).scalarMul(8); //8 * S * S_squared;
     return (newX, newY, newZ);
   };
 
@@ -529,7 +509,7 @@ module {
     let V2 = FQ12(x1).mul(z2);
 
     if (V1 == V2 and U1 == U2) {
-      return doubleFq2(p1);
+      return doubleFq12(p1);
     } else if (V1 == V2) {
       return (one, one, zero);
     };
@@ -605,14 +585,14 @@ module {
 
     if (mDenominator != FQ12_zero) {
       let v1 = FQ12(mNumerator).mul(FQ12(FQ12(z1).mul(xt)).sub(FQ12(x1).mul(zt))); // mNumerator * (xt * z1 - x1 * zt)
-      let v2 = FQ12(mNumerator).mul(FQ12(FQ12(z1).mul(yt)).sub(FQ12(y1).mul(zt))); // mDenominator * (yt * z1 - y1 * zt)
+      let v2 = FQ12(mDenominator).mul(FQ12(FQ12(z1).mul(yt)).sub(FQ12(y1).mul(zt))); // mDenominator * (yt * z1 - y1 * zt)
       let v3 = FQ12(FQ12(mDenominator).mul(zt)).mul(z1); // mDenominator * zt * z1
       return (FQ12(v1).sub(v2), v3);
     } else if (mNumerator == FQ12_zero) {
       let mNumerator = FQ12(FQ12(x1).mul(x1)).scalarMul(3); // 3 * x1 * x1;
       let mDenominator = FQ12(FQ12(y1).mul(z1)).scalarMul(2); // 2 * y1 * z1;
       let v1 = FQ12(mNumerator).mul(FQ12(FQ12(z1).mul(xt)).sub(FQ12(x1).mul(zt))); // mNumerator * (xt * z1 - x1 * zt)
-      let v2 = FQ12(mNumerator).mul(FQ12(FQ12(z1).mul(yt)).sub(FQ12(y1).mul(zt))); // mDenominator * (yt * z1 - y1 * zt)
+      let v2 = FQ12(mDenominator).mul(FQ12(FQ12(z1).mul(yt)).sub(FQ12(y1).mul(zt))); // mDenominator * (yt * z1 - y1 * zt)
       let v3 = FQ12(FQ12(mDenominator).mul(zt)).mul(z1); // mDenominator * zt * z1
       return (FQ12(v1).sub(v2), v3);
     } else {
@@ -635,19 +615,15 @@ module {
 
   // Miller loop
   public func millerLoop(Q: (Fq12, Fq12, Fq12), P: (Fq12, Fq12, Fq12), finalExponentiate: Bool): Fq12 {
-    //if (Q == null or P == null) {
-    //  return FQ12_one; // zero?
-    //};
-
     var R = Q;
     var fNum = FQ12_one;
     var fDen = FQ12_one;
 
-    for (b in Array.reverse(pseudoBinaryEncoding).vals()) {
+    for (b in Array.reverse(Array.subArray<Int>(pseudoBinaryEncoding, 0, 64)).vals()) {
       let (_n, _d) = lineFunc(R, R, P);
       fNum := FQ12(fNum).mul(FQ12(fNum).mul(_n));
-      fDen := FQ12(fDen).mul(FQ12(fDen).mul(_n));
-      R := doubleFq2(R);
+      fDen := FQ12(fDen).mul(FQ12(fDen).mul(_d));
+      R := doubleFq12(R);
 
       if (b == 1) {
         let (_n, _d) = lineFunc(R, Q, P);
@@ -670,10 +646,12 @@ module {
     R := add(R, Q1);
     let (_n2, _d2) = lineFunc(R, nQ2, P);
 
-    let f = FQ12(FQ12(FQ12(fNum).mul(_n1)).mul(_n2)).div(FQ12(FQ12(fDen).mul(_d1)).mul(_d2)); // fNum * _n1 * _n2 / (fDen * _d1 * _d2);
+    let f_top = FQ12(FQ12(fNum).mul(_n1)).mul(_n2);
+    let f_bot = FQ12(FQ12(fDen).mul(_d1)).mul(_d2);
+    let f = FQ12(f_top).div(f_bot);
 
     if (finalExponentiate) {
-      return FQ12(f).pow((fieldModulus ** 12 - 1) / curveOrder);
+      return FQ12(FQ12(f).pow(fieldModulus ** 12 - 1)).scalarDiv(curveOrder);
     } else {
       return f;
     };
