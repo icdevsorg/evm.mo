@@ -1,195 +1,82 @@
-// Modified from https://github.com/keep-network/blake2b/blob/master/compression/f.go
-// See https://github.com/keep-network/blake2b/blob/master/LICENSE for licence and conditions
+// Modified from https://datatracker.ietf.org/doc/html/rfc7693
 
 import Nat64 "mo:base/Nat64";
 import Iter "mo:base/Iter";
-import Debug "mo:base/Debug";
+import Array "mo:base/Array";
 
-module{
+module {
+    // Constants
+    let W = 64; // Word size
+    let R1: Nat64 = 32; // Rotation constants
+    let R2: Nat64 = 24;
+    let R3: Nat64 = 16;
+    let R4: Nat64 = 63;
+    let IV: [Nat64] = [
+       0x6A09E667F3BCC908, 0xBB67AE8584CAA73B,
+       0x3C6EF372FE94F82B, 0xA54FF53A5F1D36F1,
+       0x510E527FADE682D1, 0x9B05688C2B3E6C1F,
+       0x1F83D9ABFB41BD6B, 0x5BE0CD19137E2179
+    ];
 
-    // F is a compression function for BLAKE2b. It takes as an argument the state
-    // vector `h`, message block vector `m`, offset counter `t`, final
-    // block indicator flag `f`, and number of rounds `rounds`. The state vector
-    // provided as the first parameter is modified by the function.
-    public func F(rounds: Nat, h: [Nat64], m: [Nat64], t: [Nat64], f: Nat8) : [Nat64] {
+    let SIGMA: [[Nat]] = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
+        [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
+        [7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8],
+        [9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13],
+        [2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9],
+        [12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11],
+        [13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10],
+        [6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5],
+        [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3]
+    ];
 
-        // IV is an initialization vector for BLAKE2b
-        let IV: [Nat64] = [
-            0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-            0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
-        ];
+    // G Function
+    func G(v: [var Nat64], a: Nat, b: Nat, c: Nat, d: Nat, x: Nat64, y: Nat64): [var Nat64] {
 
-        // The precomputed values for BLAKE2b
-        // There are 10 16-byte arrays - one for each round
-        // The entries are calculated from the sigma constants
-        let precomputed: [[Nat]] = [
-            [0, 2, 4, 6, 1, 3, 5, 7, 8, 10, 12, 14, 9, 11, 13, 15],
-            [14, 4, 9, 13, 10, 8, 15, 6, 1, 0, 11, 5, 12, 2, 7, 3],
-            [11, 12, 5, 15, 8, 0, 2, 13, 10, 3, 7, 9, 14, 6, 1, 4],
-            [7, 3, 13, 11, 9, 1, 12, 14, 2, 5, 4, 15, 6, 10, 0, 8],
-            [9, 5, 2, 10, 0, 7, 4, 15, 14, 11, 6, 3, 1, 12, 8, 13],
-            [2, 6, 0, 8, 12, 10, 11, 3, 4, 7, 15, 1, 13, 5, 14, 9],
-            [12, 1, 14, 4, 5, 15, 13, 10, 0, 6, 9, 8, 7, 3, 2, 11],
-            [13, 7, 12, 3, 11, 14, 1, 9, 5, 15, 8, 2, 0, 4, 6, 10],
-            [6, 14, 11, 0, 15, 9, 3, 8, 12, 13, 1, 10, 2, 7, 4, 5],
-            [10, 8, 7, 1, 2, 4, 6, 5, 15, 9, 3, 13, 11, 14, 12, 0]
-        ];
+        v[a] := v[a] +% v[b] +% x;
+        v[d] := Nat64.bitrotRight(v[d] ^ v[a], R1);
+        v[c] := v[c] +% v[d];
+        v[b] := Nat64.bitrotRight(v[b] ^ v[c], R2);
+        v[a] := v[a] +% v[b] +% y;
+        v[d] := Nat64.bitrotRight(v[d] ^ v[a], R3);
+        v[c] := v[c] +% v[d];
+        v[b] := Nat64.bitrotRight(v[b] ^ v[c], R4);
 
-        let c0 = t[0];
-        let c1 = t[1];
-        var v0 = h[0];
-        var v1 = h[1];
-        var v2 = h[2];
-        var v3 = h[3];
-        var v4 = h[4];
-        var v5 = h[5];
-        var v6 = h[6];
-        var v7 = h[7];
-        var v8 = IV[0];
-        var v9 = IV[1];
-        var v10 = IV[2];
-        var v11 = IV[3];
-        var v12 = IV[4];
-        var v13 = IV[5];
-        var v14 = IV[6];
-        var v15 = IV[7];
+        return v;
+    };
 
-        v12 := v12 ^ c0;
-        v13 := v13 ^ c1;
+    // Compression function F
+    public func F(rounds: Nat, h: [Nat64], m: [Nat64], t: [Nat64], f: Nat8): [Nat64] {
+        var v = Array.thaw<Nat64>(Array.append<Nat64>(h, IV));
+
+        v[12] := v[12] ^ t[0];
+        v[13] := v[13] ^ t[1];
 
         if (f == 1) {
-            v14 := v14 ^ 0xffffffffffffffff;
+            v[14] := v[14] ^ 0xFFFFFFFFFFFFFFFF;
         };
 
-        for (j in Iter.range(1, rounds)) {
-            let s = precomputed[j%10];
+        for (i in Iter.range(0, rounds - 1)) {
+            let s = SIGMA[i % 10];
+            v := G(v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
+            v := G(v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
+            v := G(v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
+            v := G(v, 3, 7, 11, 15, m[s[6]], m[s[7]]);
 
-            v0 +%= m[s[0]];
-            v0 +%= v4;
-            v12 := v12 ^ v0;
-            v12 := Nat64.bitrotRight(v12, 32);
-            v8 +%= v12;
-            v4 := v4 ^ v8;
-            v4 := Nat64.bitrotRight(v4, 24);
-            v1 +%= m[s[1]];
-            v1 +%= v5;
-            v13 := v13 ^ v1;
-            v13 := Nat64.bitrotRight(v13, 32);
-            v9 +%= v13;
-            v5 := v5 ^ v9;
-            v5 := Nat64.bitrotRight(v5, 24);
-            v2 +%= m[s[2]];
-            v2 +%= v6;
-            v14 := v14 ^ v2;
-            v14 := Nat64.bitrotRight(v14, 32);
-            v10 +%= v14;
-            v6 := v6 ^ v10;
-            v6 := Nat64.bitrotRight(v6, 24);
-            v3 +%= m[s[3]];
-            v3 +%= v7;
-            v15 := v15 ^ v3;
-            v15 := Nat64.bitrotRight(v15, 32);
-            v11 +%= v15;
-            v7 := v7 ^ v11;
-            v7 := Nat64.bitrotRight(v7, 24);
-
-            v0 +%= m[s[4]];
-            v0 +%= v4;
-            v12 := v12 ^ v0;
-            v12 := Nat64.bitrotRight(v12, 16);
-            v8 +%= v12;
-            v4 := v4 ^ v8;
-            v4 := Nat64.bitrotRight(v4, 63);
-            v1 +%= m[s[5]];
-            v1 +%= v5;
-            v13 := v13 ^ v1;
-            v13 := Nat64.bitrotRight(v13, 16);
-            v9 +%= v13;
-            v5 := v5 ^ v9;
-            v5 := Nat64.bitrotRight(v5, 63);
-            v2 +%= m[s[6]];
-            v2 +%= v6;
-            v14 := v14 ^ v2;
-            v14 := Nat64.bitrotRight(v14, 16);
-            v10 +%= v14;
-            v6 := v6 ^ v10;
-            v6 := Nat64.bitrotRight(v6, 63);
-            v3 +%= m[s[7]];
-            v3 +%= v7;
-            v15 := v15 ^ v3;
-            v15 := Nat64.bitrotRight(v15, 16);
-            v11 +%= v15;
-            v7 := v7 ^ v11;
-            v7 := Nat64.bitrotRight(v7, 63);
-
-            v0 +%= m[s[8]];
-            v0 +%= v5;
-            v15 := v15 ^ v0;
-            v15 := Nat64.bitrotRight(v15, 32);
-            v10 +%= v15;
-            v5 := v5 ^ v10;
-            v5 := Nat64.bitrotRight(v5, 24);
-            v1 +%= m[s[9]];
-            v1 +%= v6;
-            v12 := v12 ^ v1;
-            v12 := Nat64.bitrotRight(v12, 32);
-            v11 +%= v12;
-            v6 := v6 ^ v11;
-            v6 := Nat64.bitrotRight(v6, 24);
-            v2 +%= m[s[10]];
-            v2 +%= v7;
-            v13 := v13 ^ v2;
-            v13 := Nat64.bitrotRight(v13, 32);
-            v8 +%= v13;
-            v7 := v7 ^ v8;
-            v7 := Nat64.bitrotRight(v7, 24);
-            v3 +%= m[s[11]];
-            v3 +%= v4;
-            v14 := v14 ^ v3;
-            v14 := Nat64.bitrotRight(v14, 32);
-            v9 +%= v14;
-            v4 := v4 ^ v9;
-            v4 := Nat64.bitrotRight(v4, 24);
-
-            v0 +%= m[s[12]];
-            v0 +%= v5;
-            v15 := v15 ^ v0;
-            v15 := Nat64.bitrotRight(v15, 16);
-            v10 +%= v15;
-            v5 := v5 ^ v10;
-            v5 := Nat64.bitrotRight(v5, 63);
-            v1 +%= m[s[13]];
-            v1 +%= v6;
-            v12 := v12 ^ v1;
-            v12 := Nat64.bitrotRight(v12, 16);
-            v11 +%= v12;
-            v6 := v6 ^ v11;
-            v6 := Nat64.bitrotRight(v6, 63);
-            v2 +%= m[s[14]];
-            v2 +%= v7;
-            v13 := v13 ^ v2;
-            v13 := Nat64.bitrotRight(v13, 16);
-            v8 +%= v13;
-            v7 := v7 ^ v8;
-            v7 := Nat64.bitrotRight(v7, 63);
-            v3 +%= m[s[15]];
-            v3 +%= v4;
-            v14 := v14 ^ v3;
-            v14 := Nat64.bitrotRight(v14, 16);
-            v9 +%= v14;
-            v4 := v4 ^ v9;
-            v4 := Nat64.bitrotRight(v4, 63);
+            v := G(v, 0, 5, 10, 15, m[s[8]], m[s[9]]);
+            v := G(v, 1, 6, 11, 12, m[s[10]], m[s[11]]);
+            v := G(v, 2, 7, 8, 13, m[s[12]], m[s[13]]);
+            v := G(v, 3, 4, 9, 14, m[s[14]], m[s[15]]);
         };
 
-        let k0 = h[0] ^ (v0 ^ v8);
-        let k1 = h[1] ^ (v1 ^ v9);
-        let k2 = h[2] ^ (v2 ^ v10);
-        let k3 = h[3] ^ (v3 ^ v11);
-        let k4 = h[4] ^ (v4 ^ v12);
-        let k5 = h[5] ^ (v5 ^ v13);
-        let k6 = h[6] ^ (v6 ^ v14);
-        let k7 = h[7] ^ (v7 ^ v15);
+        let newH = Array.init<Nat64>(8, 0);
+        for (i in Iter.range(0, 7)) {
+            newH[i] := h[i] ^ v[i] ^ v[i + 8];
+        };
 
-        return [k0, k1, k2, k3, k4, k5, k6, k7];
+        return Array.freeze<Nat64>(newH);
     };
 };

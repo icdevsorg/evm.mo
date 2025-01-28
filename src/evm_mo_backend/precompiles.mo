@@ -45,7 +45,6 @@ module {
         var t = x;
         while (t > 0) {
             let q = b / t;
-            //(t, a, b, u) := (b % t, u, t, a + (m - q) * u % m);
             let t1 = t;
             let a1 = a;
             t := b % t;
@@ -125,14 +124,15 @@ module {
         data
     };
 
-    func arrayN8toN64(arr: [Nat8]) : [Nat64] {
+    // Function to convert Nat8 array to an array of little-endian 8-byte words
+    func arrayN8toN64LE(arr: [Nat8]) : [Nat64] {
         var output = [] : [Nat64];
         if (arr.size() < 8) { () };
         for (i in Iter.range(0, arr.size() / 8 - 1)) {
             let subarr = Array.subArray<Nat8>(arr, i * 8, 8);
             var x = 0;
             for (j in Iter.range(0, 7)) {
-                x += Nat8.toNat(subarr[j]) * 256 ** (7 - j);
+                x += Nat8.toNat(subarr[j]) * 256 ** j;
             };
             output := Array.append<Nat64>(output, [Nat64.fromNat(x)]);
         };
@@ -153,7 +153,7 @@ module {
     // Pre-compiled contract functions
 
     let pc_00_ = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : T.ExecutionVariables {
-        // Unused function
+        // Unused function, included as a place filler and as a template in case further precompiles need to be added
         // Derive input data from calldata
         var pos: Nat = exCon.calldata.size();
         var data: Nat = 0;
@@ -583,13 +583,14 @@ module {
         };
         let rounds = arrayToNat(Array.subArray<Nat8>(inputArray, 0, 4));
         let hArr = Array.subArray<Nat8>(inputArray, 4, 64);
-        let h = arrayN8toN64(hArr);
+        let h = arrayN8toN64LE(hArr);
         let mArr = Array.subArray<Nat8>(inputArray, 68, 128);
-        let m = arrayN8toN64(mArr);
-        let tArr = Array.subArray<Nat8>(inputArray, 96, 32);
-        let t = arrayN8toN64(tArr);
+        let m = arrayN8toN64LE(mArr);
+        let tArr = Array.subArray<Nat8>(inputArray, 196, 16);
+        let t = arrayN8toN64LE(tArr);
         let f = inputArray[212];
         // Calculate result
+        // Returns an array of little-endian 8-byte words
         let resultArrN64 = Blake2.F(rounds, h, m, t, f);
         // Calculate gas
         let newGas: Int = exVar.totalGas - rounds;
@@ -605,7 +606,7 @@ module {
         for (i in Iter.range(0,7)) {
             let val = Nat64.toNat(resultArrN64[i]);
             for (j in Iter.range(0,7)) {
-                resultBuffer.add(Nat8.fromNat(val / 256 ** (7 - j) % 256));
+                resultBuffer.add(Nat8.fromNat(val / 256 ** j % 256));
             };
         };
         let result = Blob.fromArray(Buffer.toArray<Nat8>(resultBuffer));

@@ -2796,13 +2796,7 @@ await test("0009 Blake2 Compression Function F", func() : async () {
         0x51]      // MLOAD
     );
     let result = context.stack;
-    Debug.print(debug_show(result));
+    //Debug.print(debug_show(result));
     //Debug.print(debug_show("Memory:", context.memory));
-    let testpass = (result == [0x7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923, 0xba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1]);
-    Debug.print(debug_show("TEST PASS:", testpass));
+    assert(result == [0xba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1, 0x7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923]);
 });
-
-Debug.print(".");
-Debug.print("Note that the output has been modified for the last test");
-Debug.print("in order to ensure that an output is displayed. The result");
-Debug.print("for \"TEST PASS\" shows whether the test has really passed or not.");
