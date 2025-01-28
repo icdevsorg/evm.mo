@@ -136,7 +136,7 @@ module {
       var balanceChanges = balanceChanges; 
       var storageChanges = Map.new<Blob, T.StorageSlotChange>();
       var codeAdditions = Map.new<Blob, T.CodeChange>(); 
-      var codeStore = codeStore;//Map.new<Blob, [T.OpCode]>(); 
+      var codeStore = codeStore; // Map.new<Blob, [T.OpCode]>(); 
       var storageStore = storageStore;
       var logs = Vec.new<T.LogEntry>();
       var totalGas = tx.gasLimitTx;
@@ -250,7 +250,6 @@ module {
       let codeOutput = callPreCompile[codeAddress](subExCon, subExVar, engineInstance);
       if (codeOutput.programCounter > Array.size(subExCon.code) + 1) {
         Debug.print("Precompile contract call failed");
-        //Debug.print("Insufficient gas for precompiled contract call");
       };
       let gasSpent = gas - codeOutput.totalGas;
       if (codeOutput.gasRefund > gasSpent / 5) {
@@ -341,7 +340,7 @@ module {
     };
     let remainingGas = exVar.totalGas + exVar.gasRefund;
     let ethRefund = remainingGas * exCon.gasPrice;
-    if (exCon.caller == exCon.origin) { // not implemented in a subcontext
+    if (exCon.caller == exCon.origin) { // not implemented within a subcontext
       Vec.add(exVar.balanceChanges, {
         from = exCon.blockInfo.coinbase;
         to = exCon.caller;
