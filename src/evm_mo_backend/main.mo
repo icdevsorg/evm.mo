@@ -22,6 +22,12 @@ import { encodeAccount; decodeAccount; encodeAddressNonce } "rlp"; // see https:
 import { callPreCompile } "precompiles";
 import EVMStack "evmStack";
 import T "types";
+import { key } "utils";
+import { op_4A_BLOBBASEFEE } "op_4A_BLOBBASEFEE";
+import { op_5C_TLOAD } "op_5C_TLOAD";
+import { op_5D_TSTORE } "op_5D_TSTORE";
+import { op_5E_MCOPY } "op_5E_MCOPY";
+import { op_49_BLOBHASH } "op_49_BLOBHASH";
 
 module {
   
@@ -30,7 +36,7 @@ module {
   type Map<K, V> = Map.Map<K, V>;
   type Trie<K, V> = Trie.Trie<K, V>;
   type Key<K> = Trie.Key<K>;
-  func key(n: Blob) : Key<Blob> { { hash = Blob.hash(n); key = n } };
+ 
 
   public func stateTransition(
     tx: T.Transaction,
@@ -100,6 +106,7 @@ module {
       programCounter = 0; 
       stack = [];
       memory = [];
+      tempMemory = Trie.empty();
       contractStorage = calleeState.storage; 
       caller = tx.caller;
       callee = tx.callee;
@@ -117,6 +124,13 @@ module {
       totalGas = tx.gasLimitTx;
       gasRefund = 0;
       returnData = null; 
+      consensusInfo = {
+        blobBaseFee = 0; // not implemented in this version
+        baseFeePerGas = 0; // not implemented in this version
+        prevRandao = 0; // not implemented in this version
+        excessBlobGas = 0; // not implemented in this version
+        parentBeaconBlockRoot = null; // not implemented in this version
+      };
       blockInfo = {
         number = blockInfo.blockNumber; 
         gasLimit = blockInfo.blockGasLimit; 
@@ -124,6 +138,7 @@ module {
         timestamp = blockInfo.blockTimestamp; 
         coinbase = blockInfo.blockCoinbase;
         chainId = blockInfo.chainId;
+        blockCommitments = blockInfo.blockCommitments;
       };
       calldata = tx.dataTx; 
     };
@@ -131,6 +146,7 @@ module {
     let exVar: T.ExecutionVariables = {
       var programCounter = 0; 
       var stack = EVMStack.EVMStack();
+      var tempMemory = Trie.empty();
       var memory = Vec.new<Nat8>();
       var contractStorage = calleeState.storage; 
       var balanceChanges = balanceChanges; 
@@ -201,6 +217,7 @@ module {
       stack = [];
       memory = [];
       contractStorage = contractStorage; 
+      tempMemory = callerExCon.tempMemory; 
       caller = callerExCon.callee;
       callee = callee;
       currentGas = gas;
@@ -213,6 +230,7 @@ module {
       codeStore = Map.toArray<Blob, [T.OpCode]>(callerExVar.codeStore); 
       storageStore = Vec.toArray<(Blob, Blob)>(callerExVar.storageStore);
       accounts = callerExCon.accounts; 
+      consensusInfo = callerExCon.consensusInfo;
       logs = Vec.toArray<T.LogEntry>(callerExVar.logs);
       totalGas = gas;
       gasRefund = 0;
@@ -225,6 +243,7 @@ module {
       var programCounter = 0; 
       var stack = EVMStack.EVMStack();
       var memory = Vec.new<Nat8>();
+      var tempMemory = callerExVar.tempMemory;
       var contractStorage = contractStorage;
       var balanceChanges = callerExVar.balanceChanges; 
       var storageChanges = callerExVar.storageChanges;
@@ -499,7 +518,9 @@ module {
       gasRefund = exVar.gasRefund;
       returnData = exVar.returnData; 
       blockInfo = exCon.blockInfo;
+      consensusInfo = exCon.consensusInfo;
       calldata = exCon.calldata; 
+      tempMemory = exCon.tempMemory;
     };
     (newExCon, exVar);
   };
@@ -525,6 +546,7 @@ module {
       var returnData = null;
       var lastReturnData = null;
       var staticCall = 0;
+      var tempMemory = Trie.empty();
     };
     newExVar;
   };
@@ -5617,16 +5639,7 @@ module {
       };
     };
   };
-  
-  let op_49_BLOBHASH = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
-  let op_4A_BLOBBASEFEE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-
-  let op_5C_TLOAD = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-
-  let op_5D_TSTORE = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
-
-  let op_5E_MCOPY = func (exCon: T.ExecutionContext, exVar: T.ExecutionVariables, engineInstance: T.Engine) : Result<T.ExecutionVariables, Text> { #err("") };
 
 
   // Unused

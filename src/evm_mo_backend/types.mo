@@ -1,5 +1,6 @@
 import Trie "mo:base/Trie";
 import Result "mo:base/Result";
+import Blob "mo:base/Blob";
 import Vec "mo:vector"; // see https://github.com/research-ag/vector
 import Map "mo:map/Map"; // see https://mops.one/map
 import EVMStack "evmStack";
@@ -57,6 +58,7 @@ module {
     programCounter: Nat; // Points to the current instruction in the code.
     stack: [Nat]; //EVMStack; // The stack used for instruction params and return values.
     memory: [Byte]; //Memory; // Memory accessible during execution.
+    tempMemory: Storage; //Memory; // Temporary memory for storage operations.
     contractStorage: Storage; // Persistent storage for smart contracts.
     caller: Address; // Address of the call initiator.
     callee: Address; // Address of the contract being executed.
@@ -75,6 +77,13 @@ module {
     totalGas: Nat; // Used for keeping track of gas
     gasRefund: Nat; // Used for keeping track of gas refunded
     returnData: ?Blob; // set for return
+    consensusInfo: {
+      blobBaseFee: Nat;
+      baseFeePerGas: Nat;
+      prevRandao: Nat;
+      excessBlobGas:Nat;
+      parentBeaconBlockRoot: ?Blob;
+    };
     blockInfo: {
       number: Nat; //current block number
       gasLimit: Nat; //current block gas limit
@@ -82,6 +91,7 @@ module {
       timestamp: Nat; //current block timestamp
       coinbase: Blob;
       chainId: Nat;
+      blockCommitments: [Blob];
     };
     calldata: Blob; // Input data for the contract execution
   };
@@ -91,6 +101,7 @@ module {
     var stack: EVMStack;
     var memory: Memory;
     var contractStorage: Storage;
+    var tempMemory: Storage;
     var balanceChanges: Vec<BalanceChange>;
     var storageChanges: Map<Blob, StorageSlotChange>;
     var codeAdditions: Map<Blob, CodeChange>;
@@ -135,6 +146,7 @@ module {
     blockDifficulty: Nat;
     blockTimestamp: Nat;
     blockCoinbase: Blob;
+    blockCommitments: [Blob];
     chainId: Nat;
   };
 
