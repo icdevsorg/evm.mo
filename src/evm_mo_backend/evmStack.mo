@@ -72,5 +72,9 @@ module {
         return #ok(());
       }
     };
+
+    public func size() : Nat {
+      return _size;
+    };
   };
 };

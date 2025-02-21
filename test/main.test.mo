@@ -40,16 +40,19 @@ let dummyCallerState: T.CallerState = {
     storage = Trie.empty();
 };
 
+ let hash999999 = "\ac\dc\46\01\86\f7\23\3c\92\7e\7d\b2\dc\c7\03\c0\e5\00\b6\53\ca\82\27\3b\7b\fa\d8\04\5d\85\a4\70" : Blob;
+
 let dummyBlockInfo: T.BlockInfo = {
     blockNumber = 1_000_000;
     blockGasLimit = 30_000_000;
     blockDifficulty = 1_000_000_000_000;
     blockTimestamp = 1_500_000_000;
     blockCoinbase = "\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc\00\cc";
+    blockCommitments = [hash999999];
     chainId = 1;
 };
 
-let hash999999 = "\ac\dc\46\01\86\f7\23\3c\92\7e\7d\b2\dc\c7\03\c0\e5\00\b6\53\ca\82\27\3b\7b\fa\d8\04\5d\85\a4\70" : Blob;
+
 
 func testOpCodes(code: [T.OpCode]) : async T.ExecutionContext {
     let context = await stateTransition(
