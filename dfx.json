@@ -1,7 +1,7 @@
 {
   "canisters": {
-    "evm_mo_backend": {
-      "main": "src/evm_mo_backend/main.mo",
+    "playground": {
+      "main": "test/playground.mo",
       "type": "motoko"
     }
   },
