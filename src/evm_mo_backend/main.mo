@@ -520,7 +520,7 @@ module {
       blockInfo = exCon.blockInfo;
       consensusInfo = exCon.consensusInfo;
       calldata = exCon.calldata; 
-      tempMemory = exCon.tempMemory;
+      tempMemory = exVar.tempMemory;
     };
     (newExCon, exVar);
   };

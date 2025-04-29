@@ -89,10 +89,14 @@ actor {
             func (k, v) = (encode(k), encode(Blob.fromArray(v)))
         );
 
+        Debug.print(debug_show(("tempMemory", context.tempMemory)));
+
         let transientStorage = Trie.toArray<Blob, [Nat8], (Text, Text)>(
             context.tempMemory,
             func (k, v) = (encode(k), encode(Blob.fromArray(v)))
         );
+
+        Debug.print(debug_show(("tempMemory after", transientStorage)));
 
         var returnData: Text = "null";
         switch (context.returnData) {
