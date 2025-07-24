@@ -127,7 +127,9 @@ module {
     // Function to convert Nat8 array to an array of little-endian 8-byte words
     func arrayN8toN64LE(arr: [Nat8]) : [Nat64] {
         var output = [] : [Nat64];
-        if (arr.size() < 8) { () };
+        if (arr.size() < 8) {
+            return output;
+        };
         for (i in Iter.range(0, arr.size() / 8 - 1)) {
             let subarr = Array.subArray<Nat8>(arr, i * 8, 8);
             var x = 0;
